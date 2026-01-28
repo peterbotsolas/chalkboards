@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 
 type Weekday =
   | "Sunday"
@@ -10,8 +10,8 @@ type Weekday =
   | "Saturday";
 
 type TimeWindow = {
-  start: string;
-  end: string;
+  start: string; // "HH:MM" 24-hour
+  end: string;   // "HH:MM" 24-hour
   description: string;
 };
 
@@ -28,7 +28,7 @@ type Business = {
 
 const BUSINESSES: Business[] = [
   {
-    name: "Sharky's",
+    name: "Sharky’s",
     address: "545 Highland Ave, Clifton, NJ 07011",
     specials: [
       {
@@ -60,7 +60,7 @@ const BUSINESSES: Business[] = [
     ],
   },
   {
-    name: "Miller's Ale House",
+    name: "Miller’s Ale House",
     address: "270 Rte 4, Paramus, NJ 07652",
     specials: [
       {
@@ -75,6 +75,7 @@ const BUSINESSES: Business[] = [
     specials: [
       {
         day: "Thursday",
+        // You didn’t give a time window, so we’re treating it as “all day” for now.
         windows: [{ start: "00:00", end: "23:59", description: "Order of wings for $8" }],
       },
     ],
@@ -101,6 +102,7 @@ function format12Hour(d: Date): string {
 }
 
 function prettyWindow(start: string, end: string): string {
+  // keep it simple + readable
   return `${start}–${end}`;
 }
 
@@ -158,6 +160,7 @@ export default function App() {
       }
     }
 
+    // Active first, then "later today" by soonest start time
     rows.sort((a, b) => {
       if (a.status !== b.status) return a.status === "active" ? -1 : 1;
       const aStart = toMinutes(a.start);
@@ -176,19 +179,18 @@ export default function App() {
       <div style={styles.header}>
         <div style={styles.title}>Chalkboard</div>
         <div style={styles.subtitle}>
-          What's worth knowing today, near you • <b>{today}</b> • {format12Hour(new Date())}
+          What’s worth knowing today, near you • <b>{today}</b> • {format12Hour(new Date())}
         </div>
       </div>
 
       <div style={styles.controls}>
-        <label style={styles.toggle} data-testid="toggle-later-today">
+        <label style={styles.toggle}>
           <input
             type="checkbox"
             checked={showLaterToday}
             onChange={(e) => setShowLaterToday(e.target.checked)}
-            data-testid="checkbox-later-today"
           />
-          <span style={{ marginLeft: 8 }}>Show "later today" specials</span>
+          <span style={{ marginLeft: 8 }}>Show “later today” specials</span>
         </label>
       </div>
 
@@ -196,9 +198,9 @@ export default function App() {
         <div style={styles.sectionTitle}>Active right now</div>
 
         {active.length === 0 ? (
-          <div style={styles.card} data-testid="card-no-active">
+          <div style={styles.card}>
             <div style={styles.cardTitle}>No active specials right now</div>
-            <div style={styles.cardText}>Check "later today" or come back another time.</div>
+            <div style={styles.cardText}>Check “later today” or come back another time.</div>
           </div>
         ) : (
           active.map((r, idx) => <SpecialCard key={`a-${idx}`} row={r} />)
@@ -206,11 +208,11 @@ export default function App() {
       </div>
 
       {showLaterToday && (
-        <div style={styles.section} data-testid="section-later-today">
+        <div style={styles.section}>
           <div style={styles.sectionTitle}>Later today</div>
 
           {later.length === 0 ? (
-            <div style={styles.card} data-testid="card-no-later">
+            <div style={styles.card}>
               <div style={styles.cardTitle}>Nothing scheduled later today</div>
               <div style={styles.cardText}>Try another day on the board.</div>
             </div>
@@ -229,7 +231,7 @@ export default function App() {
 
 function SpecialCard({ row }: { row: TodayRow }) {
   return (
-    <div style={styles.card} data-testid={`card-special-${row.businessName.replace(/\s+/g, '-').toLowerCase()}`}>
+    <div style={styles.card}>
       <div style={styles.cardTop}>
         <div style={styles.cardTitle}>{row.businessName}</div>
         <div style={row.status === "active" ? styles.badgeActive : styles.badgeLater}>
