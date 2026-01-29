@@ -146,7 +146,7 @@ export default function App() {
   const userMarkerRef = useRef<L.Marker | null>(null);
 
   const [showLaterToday, setShowLaterToday] = useState(true);
-  const [radius, setRadius] = useState(5);
+  const [radius, setRadius] = useState(10);
   const [userLocation, setUserLocation] = useState({ lat: 40.88, lng: -74.07 });
 
   const today = weekdayFromDate(new Date());
