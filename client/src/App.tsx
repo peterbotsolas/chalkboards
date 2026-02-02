@@ -173,7 +173,21 @@ function format12Hour(d: Date): string {
   return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-// ✅ UPDATED: show "All day" instead of midnight times
+// ✅ Convert "HH:MM" (24-hour) to "h:MM AM/PM"
+function formatHHMMTo12(hhmm: string): string {
+  const parts = hhmm.split(":");
+  if (parts.length !== 2) return hhmm;
+  const hh = parseInt(parts[0], 10);
+  const mm = parseInt(parts[1], 10);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return hhmm;
+
+  const d = new Date();
+  d.setHours(hh, mm, 0, 0);
+
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+// ✅ Show "All day" or "h:MM AM – h:MM PM"
 function prettyWindow(start: string, end: string): string {
   const s = start.trim();
   const e = end.trim();
@@ -185,7 +199,7 @@ function prettyWindow(start: string, end: string): string {
 
   if (allDay) return "All day";
 
-  return `${s}–${e}`;
+  return `${formatHHMMTo12(s)} – ${formatHHMMTo12(e)}`;
 }
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -325,6 +339,17 @@ function normalizeAddress(input: string): string {
     .trim();
 }
 
+// ✅ Search helper (anywhere match, case-insensitive)
+function includesSearch(query: string, ...fields: Array<string | undefined | null>): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  for (const f of fields) {
+    const s = (f ?? "").toLowerCase();
+    if (s.includes(q)) return true;
+  }
+  return false;
+}
+
 type TodayRow = {
   businessName: string;
   address: string;
@@ -380,6 +405,9 @@ export default function App() {
   const [showLaterToday, setShowLaterToday] = useState(true);
   const [radius, setRadius] = useState(5);
   const [userLocation, setUserLocation] = useState({ lat: 40.88, lng: -74.07 });
+
+  // ✅ Search (filters list + map)
+  const [searchTerm, setSearchTerm] = useState("");
 
   // ✅ Load fonts once
   useEffect(() => {
@@ -556,8 +584,11 @@ export default function App() {
       }
     }
 
+    // Search filter
+    const filtered = rows.filter((r) => includesSearch(searchTerm, r.businessName, r.address, r.description));
+
     // active first, then closer, then start time
-    rows.sort((a, b) => {
+    filtered.sort((a, b) => {
       if (a.status !== b.status) return a.status === "active" ? -1 : 1;
       const aDist = a.distance ?? 999999;
       const bDist = b.distance ?? 999999;
@@ -565,18 +596,19 @@ export default function App() {
       return toMinutes(a.start) - toMinutes(b.start);
     });
 
-    return rows;
-  }, [today, nowMins, userLocation, radius, weeklySpecials]);
+    return filtered;
+  }, [today, nowMins, userLocation, radius, weeklySpecials, searchTerm]);
 
   const activeFlashInRadiusSorted = useMemo(() => {
     return flashSpecials
       .filter(isFlashActiveNow)
       .map((f) => ({ f, distance: getDistance(userLocation.lat, userLocation.lng, f.lat, f.lng) }))
       .filter((x) => x.distance <= radius)
+      .filter(({ f }) => includesSearch(searchTerm, f.businessName, f.fullAddress, f.description))
       .sort((a, b) => a.distance - b.distance);
-  }, [flashSpecials, timeTick, userLocation, radius]);
+  }, [flashSpecials, timeTick, userLocation, radius, searchTerm]);
 
-  // ✅ GROUPING LOGIC: address = identity
+  // GROUPING LOGIC: address = identity
   const groupedTopFeed = useMemo((): GroupedFeed[] => {
     const map = new Map<string, GroupedFeed>();
 
@@ -599,7 +631,7 @@ export default function App() {
       }
     };
 
-    // Regular (todayRows includes BOTH official + weekly)
+    // Regular
     todayRows
       .filter((r) => (showLaterToday ? true : r.status === "active"))
       .forEach((r) => {
@@ -624,7 +656,7 @@ export default function App() {
         if (r.status === "active") g.hasActiveRegular = true;
       });
 
-    // Flash specials
+    // Flash
     activeFlashInRadiusSorted.forEach(({ f, distance }) => {
       const key = normalizeAddress(f.fullAddress);
       addGroupIfNeeded(key, f.businessName, f.fullAddress, distance);
@@ -647,7 +679,6 @@ export default function App() {
         return toMinutes(a.start) - toMinutes(b.start);
       });
 
-      // Prefer regular address/label when available
       if (g.regularItems.length > 0) {
         g.address = g.regularItems[0].address;
         g.businessName = g.regularItems[0].businessName;
@@ -683,16 +714,15 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update markers (regular + flash) ✅ ONE PIN PER ADDRESS, popup shows BOTH
+  // Update markers (regular + flash) — ONE PIN PER ADDRESS
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // clear old markers
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
     type PopupBucket = {
-      key: string; // normalized address
+      key: string;
       businessName: string;
       address: string;
       lat: number;
@@ -703,7 +733,6 @@ export default function App() {
     };
 
     const buckets = new Map<string, PopupBucket>();
-
     const officialByAddress = new Map(BUSINESSES.map((b) => [normalizeAddress(b.address), b.name] as const));
 
     const upsert = (key: string, patch: Partial<PopupBucket>) => {
@@ -753,7 +782,7 @@ export default function App() {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 
-    // 1) REGULAR (todayRows includes weekly too)
+    // Regular (todayRows already filtered)
     todayRows.forEach((row) => {
       const key = normalizeAddress(row.address);
       upsert(key, {
@@ -762,11 +791,13 @@ export default function App() {
         lat: row.lat,
         lng: row.lng,
         distanceHint: row.distance ?? 999999,
-        regularLines: [`${row.status === "active" ? "🔥" : "🕒"} ${row.description}`],
+        regularLines: [
+          `${row.status === "active" ? "🔥" : "🕒"} ${row.description} (${prettyWindow(row.start, row.end)})`,
+        ],
       });
     });
 
-    // 2) FLASH
+    // Flash (already filtered)
     activeFlashInRadiusSorted.forEach(({ f, distance }) => {
       const key = normalizeAddress(f.fullAddress);
       const officialName = officialByAddress.get(key) ?? null;
@@ -780,7 +811,6 @@ export default function App() {
       });
     });
 
-    // 3) One marker per bucket
     buckets.forEach((b) => {
       if (!Number.isFinite(b.lat) || !Number.isFinite(b.lng)) return;
 
@@ -795,13 +825,6 @@ export default function App() {
                 .slice(0, 3)
                 .map((x) => `<div>${esc(x)}</div>`)
                 .join("")}
-              ${
-                flashLines.length > 3
-                  ? `<div style="opacity:.85;font-size:12px;margin-top:2px;">+ ${
-                      flashLines.length - 3
-                    } more</div>`
-                  : ""
-              }
             </div>`
           : "";
 
@@ -813,13 +836,6 @@ export default function App() {
                 .slice(0, 3)
                 .map((x) => `<div>${esc(x)}</div>`)
                 .join("")}
-              ${
-                regularLines.length > 3
-                  ? `<div style="opacity:.85;font-size:12px;margin-top:2px;">+ ${
-                      regularLines.length - 3
-                    } more</div>`
-                  : ""
-              }
             </div>`
           : "";
 
@@ -889,7 +905,6 @@ export default function App() {
     const now = Date.now();
     const expiresAt = now + flashDurationMins * 60 * 1000;
 
-    // ✅ canonicalize name by address
     const addrKey = normalizeAddress(fullAddress);
     const fromBusinesses = BUSINESSES.find((b) => normalizeAddress(b.address) === addrKey)?.name ?? null;
     const fromExistingFlash =
@@ -918,7 +933,6 @@ export default function App() {
       mapRef.current.setView([coords.lat, coords.lng], 14);
     }
 
-    // reset form
     setFlashBusinessName("");
     setFlashStreet("");
     setFlashCity("");
@@ -973,7 +987,6 @@ export default function App() {
 
     const now = Date.now();
 
-    // ✅ canonicalize name by address
     const addrKey = normalizeAddress(fullAddress);
     const fromBusinesses = BUSINESSES.find((b) => normalizeAddress(b.address) === addrKey)?.name ?? null;
     const fromExistingFlash =
@@ -1005,7 +1018,6 @@ export default function App() {
       mapRef.current.setView([coords.lat, coords.lng], 14);
     }
 
-    // reset form
     setWeeklyBusinessName("");
     setWeeklyStreet("");
     setWeeklyCity("");
@@ -1019,20 +1031,13 @@ export default function App() {
     setWeeklyPosting(false);
   };
 
-  // Hover polish (inline styles only)
   const [hovered, setHovered] = useState<string | null>(null);
 
   const buttonStyle = (key: string, variant: "primary" | "secondary" = "primary"): React.CSSProperties => {
     const base =
       variant === "primary"
-        ? {
-            background: "rgba(0, 140, 255, 0.18)",
-            border: "1px solid rgba(0, 140, 255, 0.38)",
-          }
-        : {
-            background: "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.14)",
-          };
+        ? { background: "rgba(0, 140, 255, 0.18)", border: "1px solid rgba(0, 140, 255, 0.38)" }
+        : { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)" };
 
     const isHover = hovered === key;
     return {
@@ -1043,6 +1048,12 @@ export default function App() {
       filter: isHover ? "brightness(1.08)" : "brightness(1)",
     };
   };
+
+  const resultsCount = useMemo(() => {
+    const regularCount = todayRows.filter((r) => (showLaterToday ? true : r.status === "active")).length;
+    const flashCount = activeFlashInRadiusSorted.length;
+    return { regularCount, flashCount, total: regularCount + flashCount };
+  }, [todayRows, showLaterToday, activeFlashInRadiusSorted]);
 
   return (
     <div style={styles.page}>
@@ -1057,7 +1068,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Control Bar: Discovery (left) + Actions (right) */}
       <div style={styles.controlsShell}>
         <div style={styles.controlsRow}>
           <div style={styles.groupLeft}>
@@ -1077,6 +1087,28 @@ export default function App() {
                 <option value="10">10 mi</option>
                 <option value="999">Anywhere</option>
               </select>
+            </div>
+
+            <div style={styles.searchField} data-testid="search-field">
+              <div style={styles.label}>Search</div>
+              <input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="name, address, or special…"
+                style={styles.searchInput}
+                data-testid="input-search"
+              />
+              {searchTerm.trim() && (
+                <button
+                  onClick={() => setSearchTerm("")}
+                  style={buttonStyle("clearsearch", "secondary")}
+                  onMouseEnter={() => setHovered("clearsearch")}
+                  onMouseLeave={() => setHovered(null)}
+                  data-testid="button-clear-search"
+                >
+                  Clear
+                </button>
+              )}
             </div>
 
             <button
@@ -1124,185 +1156,17 @@ export default function App() {
 
           <div style={styles.hintText}>
             Showing nearby deals within your chosen <span style={{ fontWeight: 600, opacity: 1 }}>distance</span>.
+            {searchTerm.trim() ? (
+              <span style={{ marginLeft: 10, opacity: 0.85 }}>
+                • Search results: <b>{resultsCount.total}</b>
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
 
-      {/* MAP MUST STAY FIRST (above Top 5) */}
       <div id="map" ref={mapContainerRef} style={styles.map} data-testid="map-container"></div>
 
-      {/* Flash form ONLY shows when opened */}
-      {showFlashForm && (
-        <div style={styles.section}>
-          <div style={styles.sectionTitle}>Post a Flash Special</div>
-          <div style={styles.card}>
-            <div style={{ display: "grid", gap: 10 }}>
-              <input
-                value={flashBusinessName}
-                onChange={(e) => setFlashBusinessName(e.target.value)}
-                placeholder="Business name"
-                style={styles.input}
-              />
-
-              <input
-                value={flashStreet}
-                onChange={(e) => setFlashStreet(e.target.value)}
-                placeholder="Street Address (ex: 545 Highland Ave)"
-                style={styles.input}
-              />
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 120px", gap: 10 }}>
-                <input
-                  value={flashCity}
-                  onChange={(e) => setFlashCity(e.target.value)}
-                  placeholder="City"
-                  style={styles.input}
-                />
-                <input
-                  value={flashState}
-                  onChange={(e) => setFlashState(e.target.value)}
-                  placeholder="State (ex: NJ)"
-                  style={styles.input}
-                />
-                <input
-                  value={flashZip}
-                  onChange={(e) => setFlashZip(e.target.value)}
-                  placeholder="ZIP"
-                  style={styles.input}
-                />
-              </div>
-
-              <input
-                value={flashDescription}
-                onChange={(e) => setFlashDescription(e.target.value)}
-                placeholder="What’s good right now?"
-                style={styles.input}
-              />
-
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                <label style={{ opacity: 0.9, fontSize: 13 }}>
-                  Duration:
-                  <select
-                    value={flashDurationMins}
-                    onChange={(e) => setFlashDurationMins(parseInt(e.target.value, 10))}
-                    style={{ ...styles.select, marginLeft: 8 }}
-                  >
-                    <option value={60}>1 hour</option>
-                    <option value={120}>2 hours</option>
-                    <option value={180}>3 hours</option>
-                    <option value={240}>4 hours</option>
-                  </select>
-                </label>
-
-                <button
-                  onClick={addFlashSpecial}
-                  style={buttonStyle("postflash", "primary")}
-                  disabled={flashPosting}
-                  onMouseEnter={() => setHovered("postflash")}
-                  onMouseLeave={() => setHovered(null)}
-                >
-                  {flashPosting ? "Posting..." : "Post Now"}
-                </button>
-              </div>
-
-              <div style={styles.microcopy}>Flash Specials stay after refresh and auto-expire.</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Weekly form ONLY shows when opened */}
-      {showWeeklyForm && (
-        <div style={styles.section}>
-          <div style={styles.sectionTitle}>Post a Weekly Special</div>
-          <div style={styles.card}>
-            <div style={{ display: "grid", gap: 10 }}>
-              <input
-                value={weeklyBusinessName}
-                onChange={(e) => setWeeklyBusinessName(e.target.value)}
-                placeholder="Business name"
-                style={styles.input}
-              />
-
-              <input
-                value={weeklyStreet}
-                onChange={(e) => setWeeklyStreet(e.target.value)}
-                placeholder="Street Address (ex: 545 Highland Ave)"
-                style={styles.input}
-              />
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 120px", gap: 10 }}>
-                <input
-                  value={weeklyCity}
-                  onChange={(e) => setWeeklyCity(e.target.value)}
-                  placeholder="City"
-                  style={styles.input}
-                />
-                <input
-                  value={weeklyState}
-                  onChange={(e) => setWeeklyState(e.target.value)}
-                  placeholder="State (ex: NJ)"
-                  style={styles.input}
-                />
-                <input
-                  value={weeklyZip}
-                  onChange={(e) => setWeeklyZip(e.target.value)}
-                  placeholder="ZIP"
-                  style={styles.input}
-                />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-                <label style={{ display: "grid", gap: 6, fontSize: 12, opacity: 0.9 }}>
-                  Day
-                  <select value={weeklyDay} onChange={(e) => setWeeklyDay(e.target.value as Weekday)} style={styles.select}>
-                    {WEEKDAYS.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label style={{ display: "grid", gap: 6, fontSize: 12, opacity: 0.9 }}>
-                  Start
-                  <input type="time" value={weeklyStart} onChange={(e) => setWeeklyStart(e.target.value)} style={styles.input} />
-                </label>
-
-                <label style={{ display: "grid", gap: 6, fontSize: 12, opacity: 0.9 }}>
-                  End
-                  <input type="time" value={weeklyEnd} onChange={(e) => setWeeklyEnd(e.target.value)} style={styles.input} />
-                </label>
-              </div>
-
-              <input
-                value={weeklyDescription}
-                onChange={(e) => setWeeklyDescription(e.target.value)}
-                placeholder="What’s the weekly deal?"
-                style={styles.input}
-              />
-
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                <button
-                  onClick={addWeeklySpecial}
-                  style={buttonStyle("postweekly", "primary")}
-                  disabled={weeklyPosting}
-                  onMouseEnter={() => setHovered("postweekly")}
-                  onMouseLeave={() => setHovered(null)}
-                >
-                  {weeklyPosting ? "Posting..." : "Save Weekly Special"}
-                </button>
-              </div>
-
-              <div style={styles.microcopy}>
-                Weekly Specials repeat every week on the day/time you pick (they do not expire).
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Grouped feed */}
       <div style={styles.section}>
         <div style={styles.sectionHeaderRow}>
           <div style={styles.sectionTitle}>Top 5 Near You</div>
@@ -1310,13 +1174,25 @@ export default function App() {
             <span style={{ opacity: 0.9 }}>{radius === 999 ? "Anywhere" : `${radius} mi`}</span>
             <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
             <span style={{ opacity: 0.8 }}>{showLaterToday ? "Including later today" : "Active now only"}</span>
+            {searchTerm.trim() ? (
+              <>
+                <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
+                <span style={{ opacity: 0.9 }}>
+                  Searching: <b>{searchTerm.trim()}</b>
+                </span>
+              </>
+            ) : null}
           </div>
         </div>
 
         {groupedTopFeed.length === 0 ? (
           <div style={styles.card}>
             <div style={styles.cardTitle}>No nearby specials right now</div>
-            <div style={styles.cardText}>Try increasing your distance or check back later.</div>
+            <div style={styles.cardText}>
+              {searchTerm.trim()
+                ? "Try a different search word, or clear search."
+                : "Try increasing your distance or check back later."}
+            </div>
           </div>
         ) : (
           groupedTopFeed.map((g) => <GroupedCard key={g.key} group={g} />)
@@ -1417,7 +1293,6 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 12,
   },
 
-  /** ✅ Handwritten bold title */
   title: {
     fontSize: 36,
     fontWeight: 900,
@@ -1475,6 +1350,18 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(255,255,255,0.045)",
     border: "1px solid rgba(255,255,255,0.10)",
   },
+
+  searchField: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "10px 12px",
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.045)",
+    border: "1px solid rgba(255,255,255,0.10)",
+    minWidth: 320,
+  },
+
   label: {
     fontSize: 11,
     fontWeight: 700,
@@ -1503,6 +1390,18 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "11px 12px",
     outline: "none",
     fontWeight: 500,
+  },
+
+  searchInput: {
+    background: "rgba(20,20,20,0.35)",
+    color: "#f2f2f2",
+    border: "1px solid rgba(255,255,255,0.18)",
+    borderRadius: 12,
+    padding: "9px 10px",
+    outline: "none",
+    fontWeight: 600,
+    letterSpacing: 0.1,
+    width: 220,
   },
 
   buttonBase: {
