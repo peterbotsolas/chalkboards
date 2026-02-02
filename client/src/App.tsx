@@ -1,4 +1,3 @@
-```tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -174,19 +173,7 @@ function format12Hour(d: Date): string {
   return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-/** ✅ Convert "HH:MM" (24-hr stored) → "h:mm AM/PM" (display) */
-function formatTime12FromHHMM(hhmm: string): string {
-  const [hhRaw, mmRaw] = hhmm.split(":");
-  const hh = parseInt(hhRaw, 10);
-  const mm = parseInt(mmRaw, 10);
-  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return hhmm;
-
-  const suffix = hh >= 12 ? "PM" : "AM";
-  const hour12 = hh % 12 === 0 ? 12 : hh % 12;
-  return `${hour12}:${String(mm).padStart(2, "0")} ${suffix}`;
-}
-
-// ✅ UPDATED: show "All day" instead of midnight times AND show 12-hour time
+// ✅ UPDATED: show "All day" instead of midnight times
 function prettyWindow(start: string, end: string): string {
   const s = start.trim();
   const e = end.trim();
@@ -198,7 +185,7 @@ function prettyWindow(start: string, end: string): string {
 
   if (allDay) return "All day";
 
-  return `${formatTime12FromHHMM(s)} – ${formatTime12FromHHMM(e)}`;
+  return `${s}–${e}`;
 }
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -1647,4 +1634,3 @@ const styles: Record<string, React.CSSProperties> = {
 
   footer: { marginTop: 16, opacity: 0.72, fontSize: 12, lineHeight: 1.4 },
 };
-```
