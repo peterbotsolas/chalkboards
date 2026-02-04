@@ -47,8 +47,8 @@ type FlashSpecial = {
 
 type WeeklySpecial = {
   id: string;
-
   businessName: string;
+
   street: string;
   city: string;
   state: string;
@@ -324,7 +324,7 @@ function saveWeeklyToStorage(list: WeeklySpecial[]) {
 function normalizeAddress(input: string): string {
   return input
     .toLowerCase()
-    .replace(/[’']/g, "") // remove apostrophes
+    .replace(/[’']/g, "")
     .replace(/[.,]/g, " ")
     .replace(/\bavenue\b/g, "ave")
     .replace(/\bstreet\b/g, "st")
@@ -339,7 +339,6 @@ function normalizeAddress(input: string): string {
     .trim();
 }
 
-// ✅ Search helper (anywhere match, case-insensitive)
 function includesSearch(query: string, ...fields: Array<string | undefined | null>): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
@@ -385,7 +384,7 @@ type FlashFeedItem = {
 };
 
 type GroupedFeed = {
-  key: string; // normalized address
+  key: string;
   businessName: string;
   address: string;
   distance: number;
@@ -405,11 +404,8 @@ export default function App() {
   const [showLaterToday, setShowLaterToday] = useState(true);
   const [radius, setRadius] = useState(5);
   const [userLocation, setUserLocation] = useState({ lat: 40.88, lng: -74.07 });
-
-  // ✅ Search (filters list + map)
   const [searchTerm, setSearchTerm] = useState("");
 
-  // ✅ Load fonts once
   useEffect(() => {
     ensureFontsLoaded();
   }, []);
@@ -417,7 +413,6 @@ export default function App() {
   // FLASH
   const [flashSpecials, setFlashSpecials] = useState<FlashSpecial[]>([]);
   const [showFlashForm, setShowFlashForm] = useState(false);
-
   const [flashBusinessName, setFlashBusinessName] = useState("");
   const [flashStreet, setFlashStreet] = useState("");
   const [flashCity, setFlashCity] = useState("");
@@ -430,7 +425,6 @@ export default function App() {
   // WEEKLY
   const [weeklySpecials, setWeeklySpecials] = useState<WeeklySpecial[]>([]);
   const [showWeeklyForm, setShowWeeklyForm] = useState(false);
-
   const [weeklyBusinessName, setWeeklyBusinessName] = useState("");
   const [weeklyStreet, setWeeklyStreet] = useState("");
   const [weeklyCity, setWeeklyCity] = useState("");
@@ -442,18 +436,17 @@ export default function App() {
   const [weeklyEnd, setWeeklyEnd] = useState("14:00");
   const [weeklyPosting, setWeeklyPosting] = useState(false);
 
-  // Load flash + weekly on first load
+  // Load on first load
   useEffect(() => {
     setFlashSpecials(loadFlashFromStorage());
     setWeeklySpecials(loadWeeklyFromStorage());
   }, []);
 
-  // Save flash on change
+  // Save on change
   useEffect(() => {
     saveFlashToStorage(flashSpecials);
   }, [flashSpecials]);
 
-  // Save weekly on change
   useEffect(() => {
     saveWeeklyToStorage(weeklySpecials);
   }, [weeklySpecials]);
@@ -465,7 +458,6 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
-  // Auto-remove expired flash
   useEffect(() => {
     setFlashSpecials((prev) => prev.filter((f) => isFlashActiveNow(f)));
   }, [timeTick]);
@@ -552,7 +544,6 @@ export default function App() {
       const startM = toMinutes(w.start);
       const endM = toMinutes(w.end);
 
-      // Simple rule: start must be before end on the same day
       const isActive = nowMins >= startM && nowMins <= endM;
       const isLater = nowMins < startM;
 
@@ -584,10 +575,8 @@ export default function App() {
       }
     }
 
-    // Search filter
     const filtered = rows.filter((r) => includesSearch(searchTerm, r.businessName, r.address, r.description));
 
-    // active first, then closer, then start time
     filtered.sort((a, b) => {
       if (a.status !== b.status) return a.status === "active" ? -1 : 1;
       const aDist = a.distance ?? 999999;
@@ -782,7 +771,7 @@ export default function App() {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 
-    // Regular (todayRows already filtered)
+    // Regular
     todayRows.forEach((row) => {
       const key = normalizeAddress(row.address);
       upsert(key, {
@@ -797,7 +786,7 @@ export default function App() {
       });
     });
 
-    // Flash (already filtered)
+    // Flash
     activeFlashInRadiusSorted.forEach(({ f, distance }) => {
       const key = normalizeAddress(f.fullAddress);
       const officialName = officialByAddress.get(key) ?? null;
@@ -876,6 +865,7 @@ export default function App() {
     }
   };
 
+  // ✅ FLASH submit (this is back)
   const addFlashSpecial = async () => {
     if (flashPosting) return;
 
@@ -907,8 +897,7 @@ export default function App() {
 
     const addrKey = normalizeAddress(fullAddress);
     const fromBusinesses = BUSINESSES.find((b) => normalizeAddress(b.address) === addrKey)?.name ?? null;
-    const fromExistingFlash =
-      flashSpecials.find((f) => normalizeAddress(f.fullAddress) === addrKey)?.businessName ?? null;
+    const fromExistingFlash = flashSpecials.find((f) => normalizeAddress(f.fullAddress) === addrKey)?.businessName ?? null;
     const fromWeekly = weeklySpecials.find((w) => normalizeAddress(w.fullAddress) === addrKey)?.businessName ?? null;
     const canonicalName = fromBusinesses ?? fromWeekly ?? fromExistingFlash ?? typedName;
 
@@ -929,9 +918,7 @@ export default function App() {
 
     setFlashSpecials((prev) => [newFlash, ...prev]);
 
-    if (mapRef.current) {
-      mapRef.current.setView([coords.lat, coords.lng], 14);
-    }
+    if (mapRef.current) mapRef.current.setView([coords.lat, coords.lng], 14);
 
     setFlashBusinessName("");
     setFlashStreet("");
@@ -944,6 +931,7 @@ export default function App() {
     setFlashPosting(false);
   };
 
+  // ✅ WEEKLY submit (this is back)
   const addWeeklySpecial = async () => {
     if (weeklyPosting) return;
 
@@ -989,10 +977,8 @@ export default function App() {
 
     const addrKey = normalizeAddress(fullAddress);
     const fromBusinesses = BUSINESSES.find((b) => normalizeAddress(b.address) === addrKey)?.name ?? null;
-    const fromExistingFlash =
-      flashSpecials.find((f) => normalizeAddress(f.fullAddress) === addrKey)?.businessName ?? null;
-    const fromExistingWeekly =
-      weeklySpecials.find((w) => normalizeAddress(w.fullAddress) === addrKey)?.businessName ?? null;
+    const fromExistingFlash = flashSpecials.find((f) => normalizeAddress(f.fullAddress) === addrKey)?.businessName ?? null;
+    const fromExistingWeekly = weeklySpecials.find((w) => normalizeAddress(w.fullAddress) === addrKey)?.businessName ?? null;
     const canonicalName = fromBusinesses ?? fromExistingWeekly ?? fromExistingFlash ?? typedName;
 
     const newWeekly: WeeklySpecial = {
@@ -1014,9 +1000,7 @@ export default function App() {
 
     setWeeklySpecials((prev) => [newWeekly, ...prev]);
 
-    if (mapRef.current) {
-      mapRef.current.setView([coords.lat, coords.lng], 14);
-    }
+    if (mapRef.current) mapRef.current.setView([coords.lat, coords.lng], 14);
 
     setWeeklyBusinessName("");
     setWeeklyStreet("");
@@ -1055,6 +1039,13 @@ export default function App() {
     return { regularCount, flashCount, total: regularCount + flashCount };
   }, [todayRows, showLaterToday, activeFlashInRadiusSorted]);
 
+  const formField = (label: string, child: React.ReactNode) => (
+    <div style={{ display: "grid", gap: 6 }}>
+      <div style={styles.label}>{label}</div>
+      {child}
+    </div>
+  );
+
   return (
     <div style={styles.page}>
       <div style={styles.header}>
@@ -1074,8 +1065,6 @@ export default function App() {
             <div style={styles.field}>
               <div style={styles.label}>Distance</div>
               <select
-                id="radius"
-                data-testid="select-radius"
                 value={radius}
                 onChange={(e) => setRadius(parseFloat(e.target.value))}
                 style={styles.select}
@@ -1089,14 +1078,13 @@ export default function App() {
               </select>
             </div>
 
-            <div style={styles.searchField} data-testid="search-field">
+            <div style={styles.searchField}>
               <div style={styles.label}>Search</div>
               <input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="name, address, or special…"
                 style={styles.searchInput}
-                data-testid="input-search"
               />
               {searchTerm.trim() && (
                 <button
@@ -1104,7 +1092,6 @@ export default function App() {
                   style={buttonStyle("clearsearch", "secondary")}
                   onMouseEnter={() => setHovered("clearsearch")}
                   onMouseLeave={() => setHovered(null)}
-                  data-testid="button-clear-search"
                 >
                   Clear
                 </button>
@@ -1113,7 +1100,6 @@ export default function App() {
 
             <button
               onClick={handleLocateMe}
-              data-testid="button-locate-me"
               style={buttonStyle("locate", "secondary")}
               onMouseEnter={() => setHovered("locate")}
               onMouseLeave={() => setHovered(null)}
@@ -1144,14 +1130,13 @@ export default function App() {
         </div>
 
         <div style={styles.controlsFooterRow}>
-          <label style={styles.togglePill} data-testid="toggle-later-today">
+          <label style={styles.togglePill}>
             <input
               type="checkbox"
               checked={showLaterToday}
               onChange={(e) => setShowLaterToday(e.target.checked)}
-              data-testid="checkbox-later-today"
             />
-            <span style={{ marginLeft: 8 }}>Show later today</span>
+            <span style={{ marginLeft: 8 }}>Include upcoming specials</span>
           </label>
 
           <div style={styles.hintText}>
@@ -1163,9 +1148,165 @@ export default function App() {
             ) : null}
           </div>
         </div>
+
+        {/* ✅ FLASH FORM UI (this is what was missing) */}
+        {showFlashForm && (
+          <div style={styles.formCard}>
+            <div style={styles.formTitle}>Post a Flash Special (same-day)</div>
+
+            <div style={styles.formGrid}>
+              {formField(
+                "Business name",
+                <input value={flashBusinessName} onChange={(e) => setFlashBusinessName(e.target.value)} style={styles.input} />
+              )}
+              {formField(
+                "Street",
+                <input value={flashStreet} onChange={(e) => setFlashStreet(e.target.value)} style={styles.input} />
+              )}
+              {formField(
+                "City",
+                <input value={flashCity} onChange={(e) => setFlashCity(e.target.value)} style={styles.input} />
+              )}
+              {formField(
+                "State",
+                <input value={flashState} onChange={(e) => setFlashState(e.target.value)} style={styles.input} />
+              )}
+              {formField(
+                "ZIP",
+                <input value={flashZip} onChange={(e) => setFlashZip(e.target.value)} style={styles.input} />
+              )}
+              {formField(
+                "Duration (minutes)",
+                <input
+                  type="number"
+                  min={15}
+                  max={720}
+                  value={flashDurationMins}
+                  onChange={(e) => setFlashDurationMins(parseInt(e.target.value || "120", 10))}
+                  style={styles.input}
+                />
+              )}
+              <div style={{ gridColumn: "1 / -1" }}>
+                {formField(
+                  "Special description",
+                  <input
+                    value={flashDescription}
+                    onChange={(e) => setFlashDescription(e.target.value)}
+                    placeholder='Example: "Extra wings — 8 for $10 until 5pm"'
+                    style={styles.input}
+                  />
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+              <button
+                onClick={addFlashSpecial}
+                disabled={flashPosting}
+                style={{ ...buttonStyle("flashsubmit", "primary"), opacity: flashPosting ? 0.6 : 1 }}
+                onMouseEnter={() => setHovered("flashsubmit")}
+                onMouseLeave={() => setHovered(null)}
+              >
+                {flashPosting ? "Posting..." : "Submit Flash Special"}
+              </button>
+
+              <button
+                onClick={() => setShowFlashForm(false)}
+                style={buttonStyle("flashcancel", "secondary")}
+                onMouseEnter={() => setHovered("flashcancel")}
+                onMouseLeave={() => setHovered(null)}
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div style={styles.microcopy}>
+              Flash Specials expire automatically. We use the address to drop a pin on the map.
+            </div>
+          </div>
+        )}
+
+        {/* ✅ WEEKLY FORM UI (this is what was missing) */}
+        {showWeeklyForm && (
+          <div style={styles.formCard}>
+            <div style={styles.formTitle}>Post a Weekly Special (recurring)</div>
+
+            <div style={styles.formGrid}>
+              {formField(
+                "Business name",
+                <input value={weeklyBusinessName} onChange={(e) => setWeeklyBusinessName(e.target.value)} style={styles.input} />
+              )}
+              {formField(
+                "Street",
+                <input value={weeklyStreet} onChange={(e) => setWeeklyStreet(e.target.value)} style={styles.input} />
+              )}
+              {formField("City", <input value={weeklyCity} onChange={(e) => setWeeklyCity(e.target.value)} style={styles.input} />)}
+              {formField("State", <input value={weeklyState} onChange={(e) => setWeeklyState(e.target.value)} style={styles.input} />)}
+              {formField("ZIP", <input value={weeklyZip} onChange={(e) => setWeeklyZip(e.target.value)} style={styles.input} />)}
+
+              {formField(
+                "Day",
+                <select value={weeklyDay} onChange={(e) => setWeeklyDay(e.target.value as Weekday)} style={styles.select}>
+                  {WEEKDAYS.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {formField(
+                "Start (HH:MM)",
+                <input value={weeklyStart} onChange={(e) => setWeeklyStart(e.target.value)} style={styles.input} />
+              )}
+
+              {formField(
+                "End (HH:MM)",
+                <input value={weeklyEnd} onChange={(e) => setWeeklyEnd(e.target.value)} style={styles.input} />
+              )}
+
+              <div style={{ gridColumn: "1 / -1" }}>
+                {formField(
+                  "Special description",
+                  <input
+                    value={weeklyDescription}
+                    onChange={(e) => setWeeklyDescription(e.target.value)}
+                    placeholder='Example: "Taco Tuesday — 2 tacos + soda for $9"'
+                    style={styles.input}
+                  />
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+              <button
+                onClick={addWeeklySpecial}
+                disabled={weeklyPosting}
+                style={{ ...buttonStyle("weeklysubmit", "primary"), opacity: weeklyPosting ? 0.6 : 1 }}
+                onMouseEnter={() => setHovered("weeklysubmit")}
+                onMouseLeave={() => setHovered(null)}
+              >
+                {weeklyPosting ? "Posting..." : "Submit Weekly Special"}
+              </button>
+
+              <button
+                onClick={() => setShowWeeklyForm(false)}
+                style={buttonStyle("weeklycancel", "secondary")}
+                onMouseEnter={() => setHovered("weeklycancel")}
+                onMouseLeave={() => setHovered(null)}
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div style={styles.microcopy}>
+              Weekly Specials show only on the chosen weekday (and within the time window).
+            </div>
+          </div>
+        )}
       </div>
 
-      <div id="map" ref={mapContainerRef} style={styles.map} data-testid="map-container"></div>
+      <div id="map" ref={mapContainerRef} style={styles.map}></div>
 
       <div style={styles.section}>
         <div style={styles.sectionHeaderRow}>
@@ -1243,6 +1384,7 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
           {group.regularItems.slice(0, 2).map((r, idx) => (
             <div key={`r-${idx}`} style={styles.cardText}>
               {r.status === "active" ? "🔥" : "🕒"} {r.description}
+              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{prettyWindow(r.start, r.end)}</div>
             </div>
           ))}
           {group.regularItems.length > 2 && (
@@ -1390,6 +1532,8 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "11px 12px",
     outline: "none",
     fontWeight: 500,
+    width: "100%",
+    boxSizing: "border-box",
   },
 
   searchInput: {
@@ -1477,7 +1621,7 @@ const styles: Record<string, React.CSSProperties> = {
 
   cardText: { marginTop: 6, fontSize: 14.5, lineHeight: 1.45, opacity: 0.98 },
 
-  microcopy: { fontSize: 12, opacity: 0.78, lineHeight: 1.4 },
+  microcopy: { marginTop: 10, fontSize: 12, opacity: 0.78, lineHeight: 1.4 },
 
   cardMeta: {
     marginTop: 12,
@@ -1532,4 +1676,25 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   footer: { marginTop: 16, opacity: 0.72, fontSize: 12, lineHeight: 1.4 },
+
+  // ✅ FORM STYLES
+  formCard: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.045)",
+    border: "1px solid rgba(255,255,255,0.10)",
+    boxShadow: "0 10px 26px rgba(0,0,0,0.25)",
+  },
+  formTitle: {
+    fontSize: 14,
+    fontWeight: 900,
+    letterSpacing: 0.3,
+    marginBottom: 10,
+  },
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
 };
