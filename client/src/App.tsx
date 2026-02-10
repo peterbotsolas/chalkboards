@@ -10,13 +10,11 @@ import { createClient } from "@supabase/supabase-js";
  */
 const SUPABASE_URL = "https://jpphthbbawkxbhzonvyz.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_b6cy5vUSAFkVxWkRyYJSUw_FagY1_5D";
-
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /** =========================
  *  TYPES
  *  ========================= */
-
 type Weekday =
   | "Sunday"
   | "Monday"
@@ -63,28 +61,23 @@ type FlashSpecial = {
 type WeeklySpecial = {
   id: string;
   businessName: string;
-
   street: string;
   city: string;
   state: string;
   zip: string;
   fullAddress: string;
-
   lat: number;
   lng: number;
-
   day: Weekday;
   start: string; // "HH:MM"
   end: string; // "HH:MM"
   description: string;
-
   createdAt: number;
 };
 
 /** =========================
  *  FONTS
  *  ========================= */
-
 const HANDWRITING_FONT_HREF =
   "https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap";
 
@@ -110,7 +103,6 @@ function ensureFontsLoaded() {
 /** =========================
  *  BUILT-IN SAMPLE DATA
  *  ========================= */
-
 const BUSINESSES: Business[] = [
   {
     name: "Sharky's",
@@ -177,7 +169,6 @@ const WEEKDAYS: Weekday[] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursd
 /** =========================
  *  HELPERS
  *  ========================= */
-
 function weekdayFromDate(d: Date): Weekday {
   const days: Weekday[] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   return days[d.getDay()];
@@ -206,7 +197,6 @@ function formatHHMMTo12(hhmm: string): string {
 
   const d = new Date();
   d.setHours(hh, mm, 0, 0);
-
   return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
@@ -220,7 +210,6 @@ function prettyWindow(start: string, end: string): string {
     (s === "00:00" && e === "00:00");
 
   if (allDay) return "All day";
-
   return `${formatHHMMTo12(s)} – ${formatHHMMTo12(e)}`;
 }
 
@@ -267,7 +256,6 @@ function isFlashActiveNow(f: FlashSpecial): boolean {
   return now >= f.createdAt && now <= f.expiresAt;
 }
 
-// ✅ Make "545 Highland Avenue" match "545 Highland Ave"
 function normalizeAddress(input: string): string {
   return input
     .toLowerCase()
@@ -307,12 +295,11 @@ function includesSearch(query: string, ...fields: Array<string | undefined | nul
  *   - deal (text) => description
  *   - address (text)
  *   - expires_at (timestamptz, nullable)
- *   - status (text) => "pending" | "approved" (MODERATION)
+ *   - status (text) => "pending" | "approved"
  *   - extra (text)  => JSON for weekly day/start/end
  *   - lat (float8)
  *   - lng (float8)
  *  ========================= */
-
 type DbSpecialRow = {
   id: string;
   created_at: string;
@@ -321,8 +308,8 @@ type DbSpecialRow = {
   deal: string | null;
   address: string | null;
   expires_at: string | null;
-  status: string | null; // moderation
-  extra: string | null; // weekly meta json
+  status: string | null;
+  extra: string | null;
   lat: number | null;
   lng: number | null;
 };
@@ -342,15 +329,11 @@ function tryParseWeeklyMeta(extra: string | null): { day: Weekday; start: string
   }
 }
 
-/** Convert DB rows -> app lists */
 function rowsToFlash(rows: DbSpecialRow[]): FlashSpecial[] {
   const list: FlashSpecial[] = [];
   for (const r of rows) {
     if (r.type !== "flash") continue;
-
-    // MODERATION: only show approved
     if (r.status !== "approved") continue;
-
     if (!r.address || !r.business_name || !r.deal) continue;
     if (r.lat == null || r.lng == null) continue;
     if (!r.expires_at) continue;
@@ -393,10 +376,7 @@ function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
   const list: WeeklySpecial[] = [];
   for (const r of rows) {
     if (r.type !== "weekly") continue;
-
-    // MODERATION: only show approved
     if (r.status !== "approved") continue;
-
     if (!r.address || !r.business_name || !r.deal) continue;
     if (r.lat == null || r.lng == null) continue;
 
@@ -441,7 +421,6 @@ function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
 /** =========================
  *  FEED TYPES
  *  ========================= */
-
 type TodayRow = {
   businessName: string;
   address: string;
@@ -497,7 +476,6 @@ export default function App() {
   const [userLocation, setUserLocation] = useState({ lat: 40.88, lng: -74.07 });
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Supabase load status (simple)
   const [dbStatus, setDbStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
 
   useEffect(() => {
@@ -531,7 +509,7 @@ export default function App() {
   const [weeklyPosting, setWeeklyPosting] = useState(false);
 
   /** =========================
-   *  LOAD FROM SUPABASE (on first load)
+   *  LOAD FROM SUPABASE
    *  ========================= */
   useEffect(() => {
     let cancelled = false;
@@ -539,8 +517,6 @@ export default function App() {
     async function loadFromSupabase() {
       setDbStatus("loading");
 
-      // IMPORTANT: moderation mode reads "approved" only via RLS,
-      // so this fetch will only return approved rows if your policy is set that way.
       const { data, error } = await supabase
         .from("specials")
         .select("id, created_at, type, business_name, deal, address, expires_at, status, extra, lat, lng")
@@ -564,7 +540,6 @@ export default function App() {
     }
 
     loadFromSupabase();
-
     return () => {
       cancelled = true;
     };
@@ -608,11 +583,10 @@ export default function App() {
     []
   );
 
-  // TODAY rows = built-in businesses for today + saved weekly specials for today
   const todayRows = useMemo((): TodayRow[] => {
     const rows: TodayRow[] = [];
 
-    // 1) Built-in businesses (official)
+    // Built-in businesses (official)
     for (const biz of BUSINESSES) {
       const todays = biz.specials.filter((s) => s.day === today);
       const dist = getDistance(userLocation.lat, userLocation.lng, biz.lat, biz.lng);
@@ -655,10 +629,9 @@ export default function App() {
       }
     }
 
-    // 2) Weekly specials (from Supabase) — these are already approved-only by our conversion
+    // Weekly specials (approved only)
     for (const w of weeklySpecials) {
       if (w.day !== today) continue;
-
       const dist = getDistance(userLocation.lat, userLocation.lng, w.lat, w.lng);
       if (dist > radius) continue;
 
@@ -718,7 +691,6 @@ export default function App() {
       .sort((a, b) => a.distance - b.distance);
   }, [flashSpecials, timeTick, userLocation, radius, searchTerm]);
 
-  // GROUPING LOGIC: address = identity
   const groupedTopFeed = useMemo((): GroupedFeed[] => {
     const map = new Map<string, GroupedFeed>();
 
@@ -741,7 +713,7 @@ export default function App() {
       }
     };
 
-    // Regular
+    // Regular (today)
     todayRows
       .filter((r) => (showLaterToday ? true : r.status === "active"))
       .forEach((r) => {
@@ -806,7 +778,9 @@ export default function App() {
     return list.slice(0, 5);
   }, [todayRows, activeFlashInRadiusSorted, showLaterToday, timeTick]);
 
-  // Create map once
+  /** =========================
+   *  MAP INIT (once)
+   *  ========================= */
   useEffect(() => {
     if (mapContainerRef.current && !mapRef.current) {
       mapRef.current = L.map(mapContainerRef.current).setView([userLocation.lat, userLocation.lng], 11);
@@ -815,6 +789,7 @@ export default function App() {
         attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(mapRef.current);
     }
+
     return () => {
       if (mapRef.current) {
         mapRef.current.remove();
@@ -824,7 +799,9 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update markers (regular + flash) — ONE PIN PER ADDRESS
+  /** =========================
+   *  MAP MARKERS UPDATE
+   *  ========================= */
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -958,10 +935,14 @@ export default function App() {
       const marker = L.marker([b.lat, b.lng], { icon: wingIcon })
         .addTo(mapRef.current!)
         .bindPopup(popupHtml);
+
       markersRef.current.push(marker);
     });
   }, [todayRows, wingIcon, activeFlashInRadiusSorted]);
 
+  /** =========================
+   *  LOCATE ME
+   *  ========================= */
   const handleLocateMe = () => {
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -1026,24 +1007,19 @@ export default function App() {
       weeklySpecials.find((w) => normalizeAddress(w.fullAddress) === addrKey)?.businessName ?? null;
     const canonicalName = fromBusinesses ?? fromWeekly ?? fromExistingFlash ?? typedName;
 
-    // Insert into Supabase (MODERATION MODE)
-    const { data, error } = await supabase
-      .from("specials")
-      .insert([
-        {
-          type: "flash",
-          business_name: canonicalName,
-          deal: description,
-          address: fullAddress,
-          expires_at: new Date(expiresAt).toISOString(),
-          status: "pending", // 👈 MODERATION
-          extra: null,
-          lat: coords.lat,
-          lng: coords.lng,
-        },
-      ])
-      .select("id, created_at, type, business_name, deal, address, expires_at, status, extra, lat, lng")
-      .single();
+    const { error } = await supabase.from("specials").insert([
+      {
+        type: "flash",
+        business_name: canonicalName,
+        deal: description,
+        address: fullAddress,
+        expires_at: new Date(expiresAt).toISOString(),
+        status: "pending",
+        extra: null,
+        lat: coords.lat,
+        lng: coords.lng,
+      },
+    ]);
 
     if (error) {
       console.log("SUPABASE INSERT ERROR:", error);
@@ -1053,10 +1029,6 @@ export default function App() {
       );
       return;
     }
-
-    // In moderation mode, pending items will not be visible to the public feed,
-    // so we DO NOT add it to local state (to avoid confusing “it showed then vanished”).
-    // You approve it in Supabase by changing status -> 'approved'.
 
     if (mapRef.current) mapRef.current.setView([coords.lat, coords.lng], 14);
 
@@ -1125,26 +1097,21 @@ export default function App() {
       weeklySpecials.find((w) => normalizeAddress(w.fullAddress) === addrKey)?.businessName ?? null;
     const canonicalName = fromBusinesses ?? fromExistingWeekly ?? fromExistingFlash ?? typedName;
 
-    // store weekly meta in "extra" as JSON text
     const extraJson = JSON.stringify({ day, start, end });
 
-    const { data, error } = await supabase
-      .from("specials")
-      .insert([
-        {
-          type: "weekly",
-          business_name: canonicalName,
-          deal: description,
-          address: fullAddress,
-          expires_at: null,
-          status: "pending", // 👈 MODERATION
-          extra: extraJson,
-          lat: coords.lat,
-          lng: coords.lng,
-        },
-      ])
-      .select("id, created_at, type, business_name, deal, address, expires_at, status, extra, lat, lng")
-      .single();
+    const { error } = await supabase.from("specials").insert([
+      {
+        type: "weekly",
+        business_name: canonicalName,
+        deal: description,
+        address: fullAddress,
+        expires_at: null,
+        status: "pending",
+        extra: extraJson,
+        lat: coords.lat,
+        lng: coords.lng,
+      },
+    ]);
 
     if (error) {
       console.log("SUPABASE WEEKLY INSERT ERROR:", error);
@@ -1208,7 +1175,7 @@ export default function App() {
       <div style={styles.header}>
         <div style={styles.title}>Chalkboards</div>
         <div style={styles.subtitle}>
-          <span style={{ opacity: 0.9 }}>{"What's good today, near you"}</span>
+          <span style={{ opacity: 0.9 }}>{"Live Local Specials - Posted By Real People Today"}</span>
           <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
           <b style={{ fontWeight: 700 }}>{today}</b>
           <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
@@ -1297,11 +1264,7 @@ export default function App() {
 
         <div style={styles.controlsFooterRow}>
           <label style={styles.togglePill}>
-            <input
-              type="checkbox"
-              checked={showLaterToday}
-              onChange={(e) => setShowLaterToday(e.target.checked)}
-            />
+            <input type="checkbox" checked={showLaterToday} onChange={(e) => setShowLaterToday(e.target.checked)} />
             <span style={{ marginLeft: 8 }}>Include upcoming specials</span>
           </label>
 
@@ -1374,9 +1337,7 @@ export default function App() {
               </button>
             </div>
 
-            <div style={styles.microcopy}>
-              Flash Specials expire automatically. We use the address to drop a pin on the map.
-            </div>
+            <div style={styles.microcopy}>Flash Specials expire automatically. We use the address to drop a pin on the map.</div>
           </div>
         )}
 
@@ -1443,14 +1404,12 @@ export default function App() {
               </button>
             </div>
 
-            <div style={styles.microcopy}>
-              Weekly Specials show only on the chosen weekday (and within the time window).
-            </div>
+            <div style={styles.microcopy}>Weekly Specials show only on the chosen weekday (and within the time window).</div>
           </div>
         )}
       </div>
 
-      <div id="map" ref={mapContainerRef} style={styles.map}></div>
+      <div ref={mapContainerRef} style={styles.map} />
 
       <div style={styles.section}>
         <div style={styles.sectionHeaderRow}>
@@ -1592,6 +1551,7 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 10px 26px rgba(0,0,0,0.28)",
     marginBottom: 12,
   },
+
   controlsRow: {
     display: "flex",
     gap: 12,
@@ -1599,12 +1559,14 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     flexWrap: "wrap",
   },
+
   groupLeft: {
     display: "flex",
     gap: 10,
     alignItems: "center",
     flexWrap: "wrap",
   },
+
   groupRight: {
     display: "flex",
     gap: 10,
@@ -1612,6 +1574,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     justifyContent: "flex-end",
   },
+
   controlsFooterRow: {
     display: "flex",
     gap: 10,
@@ -1817,7 +1780,6 @@ const styles: Record<string, React.CSSProperties> = {
 
   footer: { marginTop: 16, opacity: 0.72, fontSize: 12, lineHeight: 1.4 },
 
-  // FORM STYLES
   formCard: {
     marginTop: 12,
     padding: 14,
@@ -1826,18 +1788,17 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.10)",
     boxShadow: "0 10px 26px rgba(0,0,0,0.25)",
   },
+
   formTitle: {
     fontSize: 14,
     fontWeight: 900,
     letterSpacing: 0.3,
     marginBottom: 10,
   },
+
   formGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 10,
   },
 };
-
-
-
