@@ -1014,7 +1014,7 @@ export default function App() {
         deal: description,
         address: fullAddress,
         expires_at: new Date(expiresAt).toISOString(),
-        status: "pending",
+        status: "approved",
         extra: null,
         lat: coords.lat,
         lng: coords.lng,
@@ -1042,7 +1042,7 @@ export default function App() {
     setShowFlashForm(false);
     setFlashPosting(false);
 
-    alert("Submitted for approval ✅ (pending)");
+  alert("Posted live ✅");
   };
 
   /** =========================
