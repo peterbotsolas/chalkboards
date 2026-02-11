@@ -1184,7 +1184,7 @@ export default function App() {
           <span style={{ opacity: 0.9 }}>
             Database:{" "}
             {dbStatus === "ok" ? (
-              <b>LIVE</b>
+    <b style={{ color: "#00FF00" }}>LIVE</b>
             ) : dbStatus === "loading" ? (
               <b>Loading…</b>
             ) : dbStatus === "error" ? (
