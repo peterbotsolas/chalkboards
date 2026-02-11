@@ -4,6 +4,11 @@ import "leaflet/dist/leaflet.css";
 import { createClient } from "@supabase/supabase-js";
 
 /** =========================
+ *  BUILD TAG (to confirm deploy)
+ *  ========================= */
+const BUILD_TAG = "AMPM-001";
+
+/** =========================
  *  SUPABASE (your project)
  *  ========================= */
 const SUPABASE_URL = "https://jpphthbbawkxbhzonvyz.supabase.co";
@@ -48,8 +53,8 @@ type WeeklySpecial = {
   lat: number;
   lng: number;
   day: Weekday;
-  start: string; // stored as "HH:MM" (24h)
-  end: string; // stored as "HH:MM" (24h)
+  start: string; // stored "HH:MM" 24h
+  end: string; // stored "HH:MM" 24h
   description: string;
   createdAt: number;
 };
@@ -98,11 +103,8 @@ function weekdayFromDate(d: Date): Weekday {
   return WEEKDAYS[d.getDay()];
 }
 
-// expects HH:MM (24h)
 function toMinutes(hhmm: string): number {
-  const parts = hhmm.split(":");
-  const hh = parseInt(parts[0] ?? "0", 10);
-  const mm = parseInt(parts[1] ?? "0", 10);
+  const [hh, mm] = hhmm.split(":").map((n) => parseInt(n, 10));
   return hh * 60 + mm;
 }
 
@@ -162,13 +164,11 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lng: numb
   const url =
     "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" +
     encodeURIComponent(address);
-
   try {
     const res = await fetch(url, { headers: { Accept: "application/json" } });
     if (!res.ok) return null;
     const data = (await res.json()) as Array<{ lat: string; lon: string }>;
     if (!data || data.length === 0) return null;
-
     const lat = parseFloat(data[0].lat);
     const lng = parseFloat(data[0].lon);
     if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
@@ -217,8 +217,6 @@ function includesSearch(query: string, ...fields: Array<string | undefined | nul
 
 /** =========================
  *  TIME (AM/PM) HELPERS
- *  - UI uses 12h
- *  - DB stores HH:MM 24h (so your existing feed logic stays the same)
  *  ========================= */
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -232,6 +230,10 @@ function time12To24(t: Time12): string {
     if (h !== 12) h = h + 12;
   }
   return `${pad2(h)}:${t.minute}`;
+}
+
+function prettyTime12(t: Time12): string {
+  return `${t.hour}:${t.minute} ${t.ampm}`;
 }
 
 function TimePicker12({
@@ -289,18 +291,6 @@ function TimePicker12({
 
 /** =========================
  *  SUPABASE TABLE SHAPE
- *  Table: specials
- *   - id (uuid)
- *   - created_at (timestamptz)
- *   - type (text) => "flash" | "weekly"
- *   - business_name (text)
- *   - deal (text)
- *   - address (text)
- *   - expires_at (timestamptz, nullable)
- *   - status (text) => "pending" | "approved"
- *   - extra (text) => JSON for weekly day/start/end
- *   - lat (float8)
- *   - lng (float8)
  *  ========================= */
 type DbSpecialRow = {
   id: string;
@@ -311,7 +301,7 @@ type DbSpecialRow = {
   address: string | null;
   expires_at: string | null;
   status: string | null;
-  extra: string | null;
+  extra: string | null; // JSON string: { day, start, end }
   lat: number | null;
   lng: number | null;
 };
@@ -321,12 +311,10 @@ function tryParseWeeklyMeta(extra: string | null): { day: Weekday; start: string
   try {
     const obj = JSON.parse(extra) as any;
     if (!obj) return null;
-
     const day = obj.day as Weekday;
     const start = String(obj.start ?? "");
     const end = String(obj.end ?? "");
     if (!day || !start || !end) return null;
-
     return { day, start, end };
   } catch {
     return null;
@@ -335,7 +323,6 @@ function tryParseWeeklyMeta(extra: string | null): { day: Weekday; start: string
 
 function rowsToFlash(rows: DbSpecialRow[]): FlashSpecial[] {
   const list: FlashSpecial[] = [];
-
   for (const r of rows) {
     if (r.type !== "flash") continue;
     if (r.status !== "approved") continue;
@@ -374,13 +361,11 @@ function rowsToFlash(rows: DbSpecialRow[]): FlashSpecial[] {
       expiresAt,
     });
   }
-
   return list.filter(isFlashActiveNow);
 }
 
 function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
   const list: WeeklySpecial[] = [];
-
   for (const r of rows) {
     if (r.type !== "weekly") continue;
     if (r.status !== "approved") continue;
@@ -416,13 +401,12 @@ function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
       lat: r.lat,
       lng: r.lng,
       day: meta.day,
-      start: meta.start, // HH:MM 24h from DB
-      end: meta.end, // HH:MM 24h from DB
+      start: meta.start,
+      end: meta.end,
       description: r.deal,
       createdAt,
     });
   }
-
   return list;
 }
 
@@ -485,6 +469,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState("");
 
   const [dbStatus, setDbStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [dbErrorText, setDbErrorText] = useState<string>("");
 
   useEffect(() => {
     ensureFontsLoaded();
@@ -513,17 +498,9 @@ export default function App() {
   const [weeklyDescription, setWeeklyDescription] = useState("");
   const [weeklyDay, setWeeklyDay] = useState<Weekday>("Monday");
 
-  // ✅ NEW: AM/PM pickers (UI)
-  const [weeklyStart12, setWeeklyStart12] = useState<Time12>({
-    hour: 11,
-    minute: "00",
-    ampm: "AM",
-  });
-  const [weeklyEnd12, setWeeklyEnd12] = useState<Time12>({
-    hour: 2,
-    minute: "00",
-    ampm: "PM",
-  });
+  // AM/PM pickers (stored as 12h UI, converted to 24h on submit)
+  const [weeklyStart12, setWeeklyStart12] = useState<Time12>({ hour: 11, minute: "00", ampm: "AM" });
+  const [weeklyEnd12, setWeeklyEnd12] = useState<Time12>({ hour: 2, minute: "00", ampm: "PM" });
 
   const [weeklyPosting, setWeeklyPosting] = useState(false);
 
@@ -535,6 +512,7 @@ export default function App() {
 
     async function loadFromSupabase() {
       setDbStatus("loading");
+      setDbErrorText("");
 
       const { data, error } = await supabase
         .from("specials")
@@ -547,6 +525,7 @@ export default function App() {
       if (error) {
         console.log("SUPABASE LOAD ERROR:", error);
         setDbStatus("error");
+        setDbErrorText(error.message || "Unknown Supabase error");
         setFlashSpecials([]);
         setWeeklySpecials([]);
         return;
@@ -605,7 +584,6 @@ export default function App() {
   const todayRows = useMemo((): TodayRow[] => {
     const rows: TodayRow[] = [];
 
-    // Weekly specials (approved only) — from Supabase ONLY
     for (const w of weeklySpecials) {
       if (w.day !== today) continue;
 
@@ -644,7 +622,6 @@ export default function App() {
           distance: dist,
         });
       }
-      // NOTE: already-ended specials are intentionally hidden (your current behavior)
     }
 
     const filtered = rows.filter((r) => includesSearch(searchTerm, r.businessName, r.address, r.description));
@@ -842,12 +819,7 @@ export default function App() {
     };
 
     const esc = (s: string) =>
-      s
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 
     // Regular
     todayRows.forEach((row) => {
@@ -858,9 +830,7 @@ export default function App() {
         lat: row.lat,
         lng: row.lng,
         distanceHint: row.distance ?? 999999,
-        regularLines: [
-          `${row.status === "active" ? "🔥" : "🕒"} ${row.description} (${prettyWindow(row.start, row.end)})`,
-        ],
+        regularLines: [`${row.status === "active" ? "🔥" : "🕒"} ${row.description} (${prettyWindow(row.start, row.end)})`],
       });
     });
 
@@ -887,10 +857,7 @@ export default function App() {
         flashLines.length > 0
           ? `<div style="margin-top:8px;">
               <div><b>Flash</b></div>
-              ${flashLines
-                .slice(0, 3)
-                .map((x) => `<div>${esc(x)}</div>`)
-                .join("")}
+              ${flashLines.slice(0, 3).map((x) => `<div>${esc(x)}</div>`).join("")}
             </div>`
           : "";
 
@@ -898,10 +865,7 @@ export default function App() {
         regularLines.length > 0
           ? `<div style="margin-top:8px;">
               <div><b>Today</b></div>
-              ${regularLines
-                .slice(0, 3)
-                .map((x) => `<div>${esc(x)}</div>`)
-                .join("")}
+              ${regularLines.slice(0, 3).map((x) => `<div>${esc(x)}</div>`).join("")}
             </div>`
           : "";
 
@@ -1000,9 +964,7 @@ export default function App() {
     if (error) {
       console.log("SUPABASE INSERT ERROR:", error);
       setFlashPosting(false);
-      alert(
-        "Flash special could not save to the database.\n\nThis usually means Supabase security (RLS) is blocking inserts.\n\nOpen Console and copy the error to me."
-      );
+      alert("Flash special could not save to the database.\n\nOpen Console and copy the error to me.");
       return;
     }
 
@@ -1022,7 +984,7 @@ export default function App() {
   };
 
   /** =========================
-   *  WEEKLY SUBMIT -> SUPABASE
+   *  WEEKLY SUBMIT -> SUPABASE (AM/PM UI, stores HH:MM 24h)
    *  ========================= */
   const addWeeklySpecial = async () => {
     if (weeklyPosting) return;
@@ -1035,14 +997,13 @@ export default function App() {
     const description = weeklyDescription.trim();
     const day = weeklyDay;
 
-    // ✅ convert AM/PM UI to 24h "HH:MM" for storage
-    const start = time12To24(weeklyStart12);
-    const end = time12To24(weeklyEnd12);
-
     if (!typedName || !street || !city || !state || !zip || !description || !day) {
-      alert("Please fill in ALL fields (name, address, day, start, end, special).");
+      alert("Please fill in ALL fields (name, address, day, time window, special).");
       return;
     }
+
+    const start = time12To24(weeklyStart12);
+    const end = time12To24(weeklyEnd12);
 
     if (start === end) {
       alert("Start and End time cannot be the same.");
@@ -1094,9 +1055,7 @@ export default function App() {
     if (error) {
       console.log("SUPABASE WEEKLY INSERT ERROR:", error);
       setWeeklyPosting(false);
-      alert(
-        "Weekly special could not save to the database.\n\nThis usually means Supabase security (RLS) is blocking inserts.\n\nOpen Console and copy the error to me."
-      );
+      alert("Weekly special could not save to the database.\n\nOpen Console and copy the error to me.");
       return;
     }
 
@@ -1132,6 +1091,7 @@ export default function App() {
       transform: isHover ? "translateY(-1px)" : "translateY(0)",
       boxShadow: isHover ? "0 10px 24px rgba(0,0,0,0.35)" : "0 6px 18px rgba(0,0,0,0.25)",
       filter: isHover ? "brightness(1.08)" : "brightness(1)",
+      opacity: 1,
     };
   };
 
@@ -1170,11 +1130,17 @@ export default function App() {
             ) : dbStatus === "loading" ? (
               <b>Loading…</b>
             ) : dbStatus === "error" ? (
-              <b>Blocked</b>
+              <span style={{ color: "#ff6b6b" }}>
+                <b>Blocked</b>
+                {dbErrorText ? <span style={{ marginLeft: 8, opacity: 0.9 }}>({dbErrorText})</span> : null}
+              </span>
             ) : (
               <b>—</b>
             )}
           </span>
+
+          <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
+          <span style={{ opacity: 0.85, fontFamily: "monospace" }}>BUILD: {BUILD_TAG}</span>
         </div>
       </div>
 
@@ -1212,6 +1178,18 @@ export default function App() {
                 </button>
               )}
             </div>
+
+            <button
+              onClick={() => {
+                // quick sanity: show build tag
+                alert(`Build: ${BUILD_TAG}`);
+              }}
+              style={buttonStyle("buildcheck", "secondary")}
+              onMouseEnter={() => setHovered("buildcheck")}
+              onMouseLeave={() => setHovered(null)}
+            >
+              Build Check
+            </button>
 
             <button
               onClick={handleLocateMe}
@@ -1266,10 +1244,7 @@ export default function App() {
             <div style={styles.formTitle}>Post a Flash Special (same-day)</div>
 
             <div style={styles.formGrid}>
-              {formField(
-                "Business name",
-                <input value={flashBusinessName} onChange={(e) => setFlashBusinessName(e.target.value)} style={styles.input} />
-              )}
+              {formField("Business name", <input value={flashBusinessName} onChange={(e) => setFlashBusinessName(e.target.value)} style={styles.input} />)}
               {formField("Street", <input value={flashStreet} onChange={(e) => setFlashStreet(e.target.value)} style={styles.input} />)}
               {formField("City", <input value={flashCity} onChange={(e) => setFlashCity(e.target.value)} style={styles.input} />)}
               {formField("State", <input value={flashState} onChange={(e) => setFlashState(e.target.value)} style={styles.input} />)}
@@ -1323,16 +1298,13 @@ export default function App() {
           </div>
         )}
 
-        {/* WEEKLY FORM */}
+        {/* WEEKLY FORM (AM/PM) */}
         {showWeeklyForm && (
           <div style={styles.formCard}>
             <div style={styles.formTitle}>Post a Weekly Special (recurring)</div>
 
             <div style={styles.formGrid}>
-              {formField(
-                "Business name",
-                <input value={weeklyBusinessName} onChange={(e) => setWeeklyBusinessName(e.target.value)} style={styles.input} />
-              )}
+              {formField("Business name", <input value={weeklyBusinessName} onChange={(e) => setWeeklyBusinessName(e.target.value)} style={styles.input} />)}
               {formField("Street", <input value={weeklyStreet} onChange={(e) => setWeeklyStreet(e.target.value)} style={styles.input} />)}
               {formField("City", <input value={weeklyCity} onChange={(e) => setWeeklyCity(e.target.value)} style={styles.input} />)}
               {formField("State", <input value={weeklyState} onChange={(e) => setWeeklyState(e.target.value)} style={styles.input} />)}
@@ -1349,9 +1321,12 @@ export default function App() {
                 </select>
               )}
 
-              {/* ✅ AM/PM pickers */}
-              <TimePicker12 label="Start time" value={weeklyStart12} onChange={setWeeklyStart12} />
-              <TimePicker12 label="End time" value={weeklyEnd12} onChange={setWeeklyEnd12} />
+              <TimePicker12 label="Start" value={weeklyStart12} onChange={setWeeklyStart12} />
+              <TimePicker12 label="End" value={weeklyEnd12} onChange={setWeeklyEnd12} />
+
+              <div style={{ gridColumn: "1 / -1", fontSize: 12, opacity: 0.9 }}>
+                You chose: <b>{prettyTime12(weeklyStart12)}</b> – <b>{prettyTime12(weeklyEnd12)}</b>
+              </div>
 
               <div style={{ gridColumn: "1 / -1" }}>
                 {formField(
@@ -1387,9 +1362,7 @@ export default function App() {
               </button>
             </div>
 
-            <div style={styles.microcopy}>
-              Weekly Specials show only on the chosen weekday (and within the time window).
-            </div>
+            <div style={styles.microcopy}>Weekly Specials show only on the chosen weekday (and within the time window).</div>
           </div>
         )}
       </div>
@@ -1455,7 +1428,7 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
       {group.flashItems.length > 0 && (
         <div style={{ marginTop: 10 }}>
           {group.flashItems.slice(0, 2).map((f, idx) => (
-            <div key={`${f.kind}-${idx}`} style={styles.cardText}>
+            <div key={`f-${idx}`} style={styles.cardText}>
               ⚡ {f.description}
             </div>
           ))}
@@ -1468,7 +1441,7 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
       {group.regularItems.length > 0 && (
         <div style={{ marginTop: group.flashItems.length > 0 ? 12 : 8 }}>
           {group.regularItems.slice(0, 2).map((r, idx) => (
-            <div key={`${r.kind}-${idx}`} style={styles.cardText}>
+            <div key={`r-${idx}`} style={styles.cardText}>
               {r.status === "active" ? "🔥" : "🕒"} {r.description}
               <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{prettyWindow(r.start, r.end)}</div>
             </div>
@@ -1509,7 +1482,6 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.1,
     lineHeight: 1.35,
   },
-
   header: {
     padding: 14,
     borderRadius: 18,
@@ -1518,14 +1490,12 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
     marginBottom: 12,
   },
-
   title: {
     fontSize: 36,
     fontWeight: 900,
     letterSpacing: 0.6,
     fontFamily: '"Permanent Marker", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
   },
-
   subtitle: { marginTop: 6, opacity: 0.92, fontSize: 14 },
 
   controlsShell: {
@@ -1536,7 +1506,6 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 10px 26px rgba(0,0,0,0.28)",
     marginBottom: 12,
   },
-
   controlsRow: {
     display: "flex",
     gap: 12,
@@ -1544,21 +1513,8 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     flexWrap: "wrap",
   },
-
-  groupLeft: {
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-
-  groupRight: {
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-  },
+  groupLeft: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
+  groupRight: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" },
 
   controlsFooterRow: {
     display: "flex",
@@ -1570,7 +1526,6 @@ const styles: Record<string, React.CSSProperties> = {
     paddingTop: 10,
     borderTop: "1px solid rgba(255,255,255,0.08)",
   },
-
   field: {
     display: "flex",
     alignItems: "center",
@@ -1580,7 +1535,6 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(255,255,255,0.045)",
     border: "1px solid rgba(255,255,255,0.10)",
   },
-
   searchField: {
     display: "flex",
     alignItems: "center",
@@ -1591,7 +1545,6 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.10)",
     minWidth: 320,
   },
-
   label: {
     fontSize: 11,
     fontWeight: 700,
@@ -1600,7 +1553,6 @@ const styles: Record<string, React.CSSProperties> = {
     opacity: 0.85,
     whiteSpace: "nowrap",
   },
-
   select: {
     background: "rgba(20,20,20,0.35)",
     color: "#f2f2f2",
@@ -1611,7 +1563,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     letterSpacing: 0.1,
   },
-
   input: {
     background: "rgba(20,20,20,0.35)",
     color: "#f2f2f2",
@@ -1623,7 +1574,6 @@ const styles: Record<string, React.CSSProperties> = {
     width: "100%",
     boxSizing: "border-box",
   },
-
   searchInput: {
     background: "rgba(20,20,20,0.35)",
     color: "#f2f2f2",
@@ -1635,7 +1585,6 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.1,
     width: 220,
   },
-
   buttonBase: {
     padding: "11px 14px",
     borderRadius: 14,
@@ -1648,7 +1597,6 @@ const styles: Record<string, React.CSSProperties> = {
     transition: "transform 140ms ease, box-shadow 140ms ease, filter 140ms ease",
     userSelect: "none",
   },
-
   togglePill: {
     display: "flex",
     alignItems: "center",
@@ -1661,12 +1609,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 600,
   },
-
-  hintText: {
-    fontSize: 12,
-    opacity: 0.75,
-    letterSpacing: 0.1,
-  },
+  hintText: { fontSize: 12, opacity: 0.75, letterSpacing: 0.1 },
 
   map: {
     height: 260,
@@ -1678,7 +1621,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   section: { marginTop: 12 },
-
   sectionHeaderRow: {
     display: "flex",
     alignItems: "baseline",
@@ -1687,9 +1629,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 8,
   },
-
   sectionTitle: { fontSize: 16, fontWeight: 800, opacity: 0.98, letterSpacing: 0.2 },
-
   sectionMeta: { fontSize: 12, opacity: 0.85 },
 
   card: {
@@ -1700,17 +1640,10 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 10,
     boxShadow: "0 10px 26px rgba(0,0,0,0.30)",
   },
-
   cardTop: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
-
   cardTitle: { fontSize: 16, fontWeight: 850 as any },
-
   cardSubtle: { fontSize: 12, opacity: 0.75 },
-
   cardText: { marginTop: 6, fontSize: 14.5, lineHeight: 1.45, opacity: 0.98 },
-
-  microcopy: { marginTop: 10, fontSize: 12, opacity: 0.78, lineHeight: 1.4 },
-
   cardMeta: {
     marginTop: 12,
     fontSize: 12,
@@ -1720,6 +1653,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
     flexWrap: "wrap",
   },
+  microcopy: { marginTop: 10, fontSize: 12, opacity: 0.78, lineHeight: 1.4 },
 
   badgeActive: {
     padding: "5px 9px",
@@ -1730,7 +1664,6 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(0, 255, 140, 0.16)",
     border: "1px solid rgba(0, 255, 140, 0.28)",
   },
-
   badgeLater: {
     padding: "5px 9px",
     borderRadius: 999,
@@ -1740,7 +1673,6 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(255, 210, 0, 0.14)",
     border: "1px solid rgba(255, 210, 0, 0.26)",
   },
-
   badgeFlash: {
     padding: "5px 9px",
     borderRadius: 999,
@@ -1750,7 +1682,6 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(0, 140, 255, 0.14)",
     border: "1px solid rgba(0, 140, 255, 0.28)",
   },
-
   mapLink: {
     display: "inline-block",
     padding: "9px 12px",
@@ -1762,7 +1693,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 800,
     letterSpacing: 0.2,
   },
-
   footer: { marginTop: 16, opacity: 0.72, fontSize: 12, lineHeight: 1.4 },
 
   formCard: {
@@ -1773,17 +1703,6 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.10)",
     boxShadow: "0 10px 26px rgba(0,0,0,0.25)",
   },
-
-  formTitle: {
-    fontSize: 14,
-    fontWeight: 900,
-    letterSpacing: 0.3,
-    marginBottom: 10,
-  },
-
-  formGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-  },
+  formTitle: { fontSize: 14, fontWeight: 900, letterSpacing: 0.3, marginBottom: 10 },
+  formGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 },
 };
