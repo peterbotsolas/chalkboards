@@ -24,25 +24,6 @@ type Weekday =
   | "Friday"
   | "Saturday";
 
-type TimeWindow = {
-  start: string; // "HH:MM" 24-hour
-  end: string; // "HH:MM" 24-hour
-  description: string;
-};
-
-type Special = {
-  day: Weekday;
-  windows: TimeWindow[];
-};
-
-type Business = {
-  name: string;
-  address: string;
-  lat: number;
-  lng: number;
-  specials: Special[];
-};
-
 type FlashSpecial = {
   id: string;
   businessName: string;
@@ -100,77 +81,29 @@ function ensureFontsLoaded() {
   addLinkOnce("chalkboards-ui-font", UI_FONT_HREF);
 }
 
-/** =========================
- *  BUILT-IN SAMPLE DATA
- *  ========================= */
-const BUSINESSES: Business[] = [
-  {
-    name: "Sharky's",
-    address: "545 Highland Ave, Clifton, NJ 07011",
-    lat: 40.8584,
-    lng: -74.1438,
-    specials: [
-      {
-        day: "Monday",
-        windows: [
-          { start: "11:30", end: "14:00", description: "Lunch: 8 wings + fries for $10.99" },
-          { start: "20:00", end: "22:00", description: "Night: $0.90 wings" },
-        ],
-      },
-      {
-        day: "Tuesday",
-        windows: [
-          { start: "11:30", end: "14:00", description: "Lunch: 8 wings + fries for $10.99" },
-          { start: "20:00", end: "22:00", description: "Night: $0.90 wings" },
-        ],
-      },
-      {
-        day: "Wednesday",
-        windows: [{ start: "11:30", end: "14:00", description: "Lunch: 8 wings + fries for $10.99" }],
-      },
-      {
-        day: "Thursday",
-        windows: [{ start: "11:30", end: "14:00", description: "Lunch: 8 wings + fries for $10.99" }],
-      },
-      {
-        day: "Friday",
-        windows: [{ start: "11:30", end: "14:00", description: "Lunch: 8 wings + fries for $10.99" }],
-      },
-    ],
-  },
-  {
-    name: "Miller's Ale House",
-    address: "270 Rte 4, Paramus, NJ 07652",
-    lat: 40.9137,
-    lng: -74.0701,
-    specials: [
-      {
-        day: "Wednesday",
-        windows: [{ start: "00:00", end: "23:59", description: "All day: 12 wings for $12" }],
-      },
-    ],
-  },
-  {
-    name: "Grant Street Cafe",
-    address: "25 Grant Ave, Dumont, NJ 07628",
-    lat: 40.9406,
-    lng: -73.9965,
-    specials: [
-      {
-        day: "Thursday",
-        windows: [{ start: "00:00", end: "23:59", description: "Order of wings for $8" }],
-      },
-    ],
-  },
+const WEEKDAYS: Weekday[] = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
 ];
-
-const WEEKDAYS: Weekday[] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 /** =========================
  *  HELPERS
  *  ========================= */
 function weekdayFromDate(d: Date): Weekday {
-  const days: Weekday[] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const days: Weekday[] = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ];
   return days[d.getDay()];
 }
 
@@ -232,7 +165,9 @@ function minutesFromNow(ms: number): number {
 }
 
 async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
-  const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(address);
+  const url =
+    "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" +
+    encodeURIComponent(address);
   try {
     const res = await fetch(url, { headers: { Accept: "application/json" } });
     if (!res.ok) return null;
@@ -586,50 +521,7 @@ export default function App() {
   const todayRows = useMemo((): TodayRow[] => {
     const rows: TodayRow[] = [];
 
-    // Built-in businesses (official)
-    for (const biz of BUSINESSES) {
-      const todays = biz.specials.filter((s) => s.day === today);
-      const dist = getDistance(userLocation.lat, userLocation.lng, biz.lat, biz.lng);
-      if (dist > radius) continue;
-
-      for (const s of todays) {
-        for (const w of s.windows) {
-          const startM = toMinutes(w.start);
-          const endM = toMinutes(w.end);
-          const isActive = nowMins >= startM && nowMins <= endM;
-          const isLater = nowMins < startM;
-
-          if (isActive) {
-            rows.push({
-              businessName: biz.name,
-              address: biz.address,
-              lat: biz.lat,
-              lng: biz.lng,
-              start: w.start,
-              end: w.end,
-              description: w.description,
-              status: "active",
-              distance: dist,
-            });
-          } else if (isLater) {
-            rows.push({
-              businessName: biz.name,
-              address: biz.address,
-              lat: biz.lat,
-              lng: biz.lng,
-              start: w.start,
-              end: w.end,
-              description: w.description,
-              status: "later",
-              startsInMinutes: startM - nowMins,
-              distance: dist,
-            });
-          }
-        }
-      }
-    }
-
-    // Weekly specials (approved only)
+    // Weekly specials (approved only) — from Supabase ONLY
     for (const w of weeklySpecials) {
       if (w.day !== today) continue;
       const dist = getDistance(userLocation.lat, userLocation.lng, w.lat, w.lng);
@@ -669,7 +561,9 @@ export default function App() {
       }
     }
 
-    const filtered = rows.filter((r) => includesSearch(searchTerm, r.businessName, r.address, r.description));
+    const filtered = rows.filter((r) =>
+      includesSearch(searchTerm, r.businessName, r.address, r.description)
+    );
 
     filtered.sort((a, b) => {
       if (a.status !== b.status) return a.status === "active" ? -1 : 1;
@@ -685,9 +579,14 @@ export default function App() {
   const activeFlashInRadiusSorted = useMemo(() => {
     return flashSpecials
       .filter(isFlashActiveNow)
-      .map((f) => ({ f, distance: getDistance(userLocation.lat, userLocation.lng, f.lat, f.lng) }))
+      .map((f) => ({
+        f,
+        distance: getDistance(userLocation.lat, userLocation.lng, f.lat, f.lng),
+      }))
       .filter((x) => x.distance <= radius)
-      .filter(({ f }) => includesSearch(searchTerm, f.businessName, f.fullAddress, f.description))
+      .filter(({ f }) =>
+        includesSearch(searchTerm, f.businessName, f.fullAddress, f.description)
+      )
       .sort((a, b) => a.distance - b.distance);
   }, [flashSpecials, timeTick, userLocation, radius, searchTerm]);
 
@@ -783,10 +682,14 @@ export default function App() {
    *  ========================= */
   useEffect(() => {
     if (mapContainerRef.current && !mapRef.current) {
-      mapRef.current = L.map(mapContainerRef.current).setView([userLocation.lat, userLocation.lng], 11);
+      mapRef.current = L.map(mapContainerRef.current).setView(
+        [userLocation.lat, userLocation.lng],
+        11
+      );
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
-        attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        attribution:
+          '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(mapRef.current);
     }
 
@@ -820,7 +723,6 @@ export default function App() {
     };
 
     const buckets = new Map<string, PopupBucket>();
-    const officialByAddress = new Map(BUSINESSES.map((b) => [normalizeAddress(b.address), b.name] as const));
 
     const upsert = (key: string, patch: Partial<PopupBucket>) => {
       const existing = buckets.get(key);
@@ -879,7 +781,10 @@ export default function App() {
         lng: row.lng,
         distanceHint: row.distance ?? 999999,
         regularLines: [
-          `${row.status === "active" ? "🔥" : "🕒"} ${row.description} (${prettyWindow(row.start, row.end)})`,
+          `${row.status === "active" ? "🔥" : "🕒"} ${row.description} (${prettyWindow(
+            row.start,
+            row.end
+          )})`,
         ],
       });
     });
@@ -887,9 +792,8 @@ export default function App() {
     // Flash
     activeFlashInRadiusSorted.forEach(({ f, distance }) => {
       const key = normalizeAddress(f.fullAddress);
-      const officialName = officialByAddress.get(key) ?? null;
       upsert(key, {
-        businessName: officialName ?? f.businessName,
+        businessName: f.businessName,
         address: f.fullAddress,
         lat: f.lat,
         lng: f.lng,
@@ -930,7 +834,9 @@ export default function App() {
           <a href="${mapsUrlFromAddress(b.address)}" target="_blank" rel="noopener noreferrer">Open in Maps</a>
         </div>`;
 
-      const popupHtml = `<b>${esc(b.businessName || "Business")}</b><br>${esc(b.address)}${flashHtml}${regularHtml}${mapsLink}`;
+      const popupHtml = `<b>${esc(b.businessName || "Business")}</b><br>${esc(
+        b.address
+      )}${flashHtml}${regularHtml}${mapsLink}`;
 
       const marker = L.marker([b.lat, b.lng], { icon: wingIcon })
         .addTo(mapRef.current!)
@@ -999,13 +905,14 @@ export default function App() {
     const now = Date.now();
     const expiresAt = now + flashDurationMins * 60 * 1000;
 
+    // ONLY use existing Supabase-loaded items for name consistency (no hardcoded list)
     const addrKey = normalizeAddress(fullAddress);
-    const fromBusinesses = BUSINESSES.find((b) => normalizeAddress(b.address) === addrKey)?.name ?? null;
     const fromExistingFlash =
       flashSpecials.find((f) => normalizeAddress(f.fullAddress) === addrKey)?.businessName ?? null;
     const fromWeekly =
       weeklySpecials.find((w) => normalizeAddress(w.fullAddress) === addrKey)?.businessName ?? null;
-    const canonicalName = fromBusinesses ?? fromWeekly ?? fromExistingFlash ?? typedName;
+
+    const canonicalName = fromWeekly ?? fromExistingFlash ?? typedName;
 
     const { error } = await supabase.from("specials").insert([
       {
@@ -1042,7 +949,7 @@ export default function App() {
     setShowFlashForm(false);
     setFlashPosting(false);
 
-  alert("Posted live ✅");
+    alert("Posted live ✅");
   };
 
   /** =========================
@@ -1089,13 +996,14 @@ export default function App() {
       return;
     }
 
+    // ONLY Supabase-loaded items for name consistency (no hardcoded list)
     const addrKey = normalizeAddress(fullAddress);
-    const fromBusinesses = BUSINESSES.find((b) => normalizeAddress(b.address) === addrKey)?.name ?? null;
     const fromExistingFlash =
       flashSpecials.find((f) => normalizeAddress(f.fullAddress) === addrKey)?.businessName ?? null;
     const fromExistingWeekly =
       weeklySpecials.find((w) => normalizeAddress(w.fullAddress) === addrKey)?.businessName ?? null;
-    const canonicalName = fromBusinesses ?? fromExistingWeekly ?? fromExistingFlash ?? typedName;
+
+    const canonicalName = fromExistingWeekly ?? fromExistingFlash ?? typedName;
 
     const extraJson = JSON.stringify({ day, start, end });
 
@@ -1174,6 +1082,7 @@ export default function App() {
     <div style={styles.page}>
       <div style={styles.header}>
         <div style={styles.title}>Chalkboards</div>
+
         <div style={styles.subtitle}>
           <span style={{ opacity: 0.9 }}>{"Live Local Specials - Posted By Real People Today"}</span>
           <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
@@ -1181,10 +1090,13 @@ export default function App() {
           <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
           <span style={{ opacity: 0.9 }}>{format12Hour(new Date())}</span>
           <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
+
           <span style={{ opacity: 0.9 }}>
             Database:{" "}
             {dbStatus === "ok" ? (
-    <b style={{ color: "#00FF00" }}>LIVE</b>
+              <span style={{ color: "#00FF00", fontFamily: "monospace" }}>
+                <b>LIVE</b>
+              </span>
             ) : dbStatus === "loading" ? (
               <b>Loading…</b>
             ) : dbStatus === "error" ? (
@@ -1433,7 +1345,9 @@ export default function App() {
           <div style={styles.card}>
             <div style={styles.cardTitle}>No nearby specials right now</div>
             <div style={styles.cardText}>
-              {searchTerm.trim() ? "Try a different search word, or clear search." : "Try increasing your distance or check back later."}
+              {searchTerm.trim()
+                ? "Try a different search word, or clear search."
+                : "Try increasing your distance or check back later."}
             </div>
           </div>
         ) : (
@@ -1463,7 +1377,9 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {hasFlash && <div style={styles.badgeFlash}>FLASH</div>}
-          <div style={hasActive ? styles.badgeActive : styles.badgeLater}>{hasActive ? "ACTIVE" : "LATER"}</div>
+          <div style={hasActive ? styles.badgeActive : styles.badgeLater}>
+            {hasActive ? "ACTIVE" : "LATER"}
+          </div>
         </div>
       </div>
 
@@ -1475,7 +1391,9 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
             </div>
           ))}
           {group.flashItems.length > 2 && (
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>+ {group.flashItems.length - 2} more flash</div>
+            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
+              + {group.flashItems.length - 2} more flash
+            </div>
           )}
         </div>
       )}
@@ -1485,17 +1403,26 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
           {group.regularItems.slice(0, 2).map((r, idx) => (
             <div key={`r-${idx}`} style={styles.cardText}>
               {r.status === "active" ? "🔥" : "🕒"} {r.description}
-              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{prettyWindow(r.start, r.end)}</div>
+              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
+                {prettyWindow(r.start, r.end)}
+              </div>
             </div>
           ))}
           {group.regularItems.length > 2 && (
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>+ {group.regularItems.length - 2} more specials</div>
+            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
+              + {group.regularItems.length - 2} more specials
+            </div>
           )}
         </div>
       )}
 
       <div style={{ marginTop: 12 }}>
-        <a href={mapsUrlFromAddress(group.address)} target="_blank" rel="noopener noreferrer" style={styles.mapLink}>
+        <a
+          href={mapsUrlFromAddress(group.address)}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={styles.mapLink}
+        >
           Open in Maps
         </a>
       </div>
@@ -1518,7 +1445,8 @@ const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     padding: 16,
-    background: "radial-gradient(1200px 700px at 20% -10%, rgba(0, 140, 255, 0.10), transparent 60%), #141414",
+    background:
+      "radial-gradient(1200px 700px at 20% -10%, rgba(0, 140, 255, 0.10), transparent 60%), #141414",
     color: "#f2f2f2",
     fontFamily: '"Inter", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
     letterSpacing: 0.1,
