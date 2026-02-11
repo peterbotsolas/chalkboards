@@ -1182,9 +1182,9 @@ export default function App() {
           <span style={{ opacity: 0.9 }}>{format12Hour(new Date())}</span>
           <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
           <span style={{ opacity: 0.9 }}>
-            DB:{" "}
+            Database:{" "}
             {dbStatus === "ok" ? (
-              <b>Connected</b>
+              <b>LIVE</b>
             ) : dbStatus === "loading" ? (
               <b>Loading…</b>
             ) : dbStatus === "error" ? (
