@@ -5,9 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 
 /** =========================
  *  SUPABASE (your project)
- *  =========================
- *  These are OK to use in the browser (publishable key).
- */
+ *  ========================= */
 const SUPABASE_URL = "https://jpphthbbawkxbhzonvyz.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_b6cy5vUSAFkVxWkRyYJSUw_FagY1_5D";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -50,18 +48,20 @@ type WeeklySpecial = {
   lat: number;
   lng: number;
   day: Weekday;
-  start: string; // "HH:MM"
-  end: string; // "HH:MM"
+  start: string; // stored as "HH:MM" (24h)
+  end: string; // stored as "HH:MM" (24h)
   description: string;
   createdAt: number;
 };
+
+type AmPm = "AM" | "PM";
+type Time12 = { hour: number; minute: string; ampm: AmPm };
 
 /** =========================
  *  FONTS
  *  ========================= */
 const HANDWRITING_FONT_HREF =
   "https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap";
-
 const UI_FONT_HREF =
   "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap";
 
@@ -95,20 +95,14 @@ const WEEKDAYS: Weekday[] = [
  *  HELPERS
  *  ========================= */
 function weekdayFromDate(d: Date): Weekday {
-  const days: Weekday[] = [
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-  ];
-  return days[d.getDay()];
+  return WEEKDAYS[d.getDay()];
 }
 
+// expects HH:MM (24h)
 function toMinutes(hhmm: string): number {
-  const [hh, mm] = hhmm.split(":").map((n) => parseInt(n, 10));
+  const parts = hhmm.split(":");
+  const hh = parseInt(parts[0] ?? "0", 10);
+  const mm = parseInt(parts[1] ?? "0", 10);
   return hh * 60 + mm;
 }
 
@@ -168,11 +162,13 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lng: numb
   const url =
     "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" +
     encodeURIComponent(address);
+
   try {
     const res = await fetch(url, { headers: { Accept: "application/json" } });
     if (!res.ok) return null;
     const data = (await res.json()) as Array<{ lat: string; lon: string }>;
     if (!data || data.length === 0) return null;
+
     const lat = parseFloat(data[0].lat);
     const lng = parseFloat(data[0].lon);
     if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
@@ -220,18 +216,89 @@ function includesSearch(query: string, ...fields: Array<string | undefined | nul
 }
 
 /** =========================
+ *  TIME (AM/PM) HELPERS
+ *  - UI uses 12h
+ *  - DB stores HH:MM 24h (so your existing feed logic stays the same)
+ *  ========================= */
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function time12To24(t: Time12): string {
+  let h = t.hour;
+  if (t.ampm === "AM") {
+    if (h === 12) h = 0;
+  } else {
+    if (h !== 12) h = h + 12;
+  }
+  return `${pad2(h)}:${t.minute}`;
+}
+
+function TimePicker12({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: Time12;
+  onChange: (next: Time12) => void;
+}) {
+  const hours = Array.from({ length: 12 }, (_, i) => i + 1);
+  const minutes = ["00", "15", "30", "45"];
+
+  return (
+    <div style={{ display: "grid", gap: 6 }}>
+      <div style={styles.label}>{label}</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <select
+          value={value.hour}
+          onChange={(e) => onChange({ ...value, hour: parseInt(e.target.value, 10) })}
+          style={styles.select}
+        >
+          {hours.map((h) => (
+            <option key={h} value={h}>
+              {h}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={value.minute}
+          onChange={(e) => onChange({ ...value, minute: e.target.value })}
+          style={styles.select}
+        >
+          {minutes.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={value.ampm}
+          onChange={(e) => onChange({ ...value, ampm: e.target.value as AmPm })}
+          style={styles.select}
+        >
+          <option value="AM">AM</option>
+          <option value="PM">PM</option>
+        </select>
+      </div>
+    </div>
+  );
+}
+
+/** =========================
  *  SUPABASE TABLE SHAPE
  *  Table: specials
- *  columns we use:
  *   - id (uuid)
  *   - created_at (timestamptz)
- *   - type (text)  => "flash" | "weekly"
+ *   - type (text) => "flash" | "weekly"
  *   - business_name (text)
- *   - deal (text) => description
+ *   - deal (text)
  *   - address (text)
  *   - expires_at (timestamptz, nullable)
  *   - status (text) => "pending" | "approved"
- *   - extra (text)  => JSON for weekly day/start/end
+ *   - extra (text) => JSON for weekly day/start/end
  *   - lat (float8)
  *   - lng (float8)
  *  ========================= */
@@ -254,10 +321,12 @@ function tryParseWeeklyMeta(extra: string | null): { day: Weekday; start: string
   try {
     const obj = JSON.parse(extra) as any;
     if (!obj) return null;
+
     const day = obj.day as Weekday;
     const start = String(obj.start ?? "");
     const end = String(obj.end ?? "");
     if (!day || !start || !end) return null;
+
     return { day, start, end };
   } catch {
     return null;
@@ -266,6 +335,7 @@ function tryParseWeeklyMeta(extra: string | null): { day: Weekday; start: string
 
 function rowsToFlash(rows: DbSpecialRow[]): FlashSpecial[] {
   const list: FlashSpecial[] = [];
+
   for (const r of rows) {
     if (r.type !== "flash") continue;
     if (r.status !== "approved") continue;
@@ -304,11 +374,13 @@ function rowsToFlash(rows: DbSpecialRow[]): FlashSpecial[] {
       expiresAt,
     });
   }
+
   return list.filter(isFlashActiveNow);
 }
 
 function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
   const list: WeeklySpecial[] = [];
+
   for (const r of rows) {
     if (r.type !== "weekly") continue;
     if (r.status !== "approved") continue;
@@ -344,12 +416,13 @@ function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
       lat: r.lat,
       lng: r.lng,
       day: meta.day,
-      start: meta.start,
-      end: meta.end,
+      start: meta.start, // HH:MM 24h from DB
+      end: meta.end, // HH:MM 24h from DB
       description: r.deal,
       createdAt,
     });
   }
+
   return list;
 }
 
@@ -439,8 +512,19 @@ export default function App() {
   const [weeklyZip, setWeeklyZip] = useState("");
   const [weeklyDescription, setWeeklyDescription] = useState("");
   const [weeklyDay, setWeeklyDay] = useState<Weekday>("Monday");
-  const [weeklyStart, setWeeklyStart] = useState("11:00");
-  const [weeklyEnd, setWeeklyEnd] = useState("14:00");
+
+  // ✅ NEW: AM/PM pickers (UI)
+  const [weeklyStart12, setWeeklyStart12] = useState<Time12>({
+    hour: 11,
+    minute: "00",
+    ampm: "AM",
+  });
+  const [weeklyEnd12, setWeeklyEnd12] = useState<Time12>({
+    hour: 2,
+    minute: "00",
+    ampm: "PM",
+  });
+
   const [weeklyPosting, setWeeklyPosting] = useState(false);
 
   /** =========================
@@ -524,6 +608,7 @@ export default function App() {
     // Weekly specials (approved only) — from Supabase ONLY
     for (const w of weeklySpecials) {
       if (w.day !== today) continue;
+
       const dist = getDistance(userLocation.lat, userLocation.lng, w.lat, w.lng);
       if (dist > radius) continue;
 
@@ -559,11 +644,10 @@ export default function App() {
           distance: dist,
         });
       }
+      // NOTE: already-ended specials are intentionally hidden (your current behavior)
     }
 
-    const filtered = rows.filter((r) =>
-      includesSearch(searchTerm, r.businessName, r.address, r.description)
-    );
+    const filtered = rows.filter((r) => includesSearch(searchTerm, r.businessName, r.address, r.description));
 
     filtered.sort((a, b) => {
       if (a.status !== b.status) return a.status === "active" ? -1 : 1;
@@ -584,9 +668,7 @@ export default function App() {
         distance: getDistance(userLocation.lat, userLocation.lng, f.lat, f.lng),
       }))
       .filter((x) => x.distance <= radius)
-      .filter(({ f }) =>
-        includesSearch(searchTerm, f.businessName, f.fullAddress, f.description)
-      )
+      .filter(({ f }) => includesSearch(searchTerm, f.businessName, f.fullAddress, f.description))
       .sort((a, b) => a.distance - b.distance);
   }, [flashSpecials, timeTick, userLocation, radius, searchTerm]);
 
@@ -682,14 +764,10 @@ export default function App() {
    *  ========================= */
   useEffect(() => {
     if (mapContainerRef.current && !mapRef.current) {
-      mapRef.current = L.map(mapContainerRef.current).setView(
-        [userLocation.lat, userLocation.lng],
-        11
-      );
+      mapRef.current = L.map(mapContainerRef.current).setView([userLocation.lat, userLocation.lng], 11);
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
-        attribution:
-          '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(mapRef.current);
     }
 
@@ -781,10 +859,7 @@ export default function App() {
         lng: row.lng,
         distanceHint: row.distance ?? 999999,
         regularLines: [
-          `${row.status === "active" ? "🔥" : "🕒"} ${row.description} (${prettyWindow(
-            row.start,
-            row.end
-          )})`,
+          `${row.status === "active" ? "🔥" : "🕒"} ${row.description} (${prettyWindow(row.start, row.end)})`,
         ],
       });
     });
@@ -834,14 +909,9 @@ export default function App() {
           <a href="${mapsUrlFromAddress(b.address)}" target="_blank" rel="noopener noreferrer">Open in Maps</a>
         </div>`;
 
-      const popupHtml = `<b>${esc(b.businessName || "Business")}</b><br>${esc(
-        b.address
-      )}${flashHtml}${regularHtml}${mapsLink}`;
+      const popupHtml = `<b>${esc(b.businessName || "Business")}</b><br>${esc(b.address)}${flashHtml}${regularHtml}${mapsLink}`;
 
-      const marker = L.marker([b.lat, b.lng], { icon: wingIcon })
-        .addTo(mapRef.current!)
-        .bindPopup(popupHtml);
-
+      const marker = L.marker([b.lat, b.lng], { icon: wingIcon }).addTo(mapRef.current!).bindPopup(popupHtml);
       markersRef.current.push(marker);
     });
   }, [todayRows, wingIcon, activeFlashInRadiusSorted]);
@@ -905,7 +975,6 @@ export default function App() {
     const now = Date.now();
     const expiresAt = now + flashDurationMins * 60 * 1000;
 
-    // ONLY use existing Supabase-loaded items for name consistency (no hardcoded list)
     const addrKey = normalizeAddress(fullAddress);
     const fromExistingFlash =
       flashSpecials.find((f) => normalizeAddress(f.fullAddress) === addrKey)?.businessName ?? null;
@@ -965,10 +1034,12 @@ export default function App() {
     const zip = weeklyZip.trim();
     const description = weeklyDescription.trim();
     const day = weeklyDay;
-    const start = weeklyStart.trim();
-    const end = weeklyEnd.trim();
 
-    if (!typedName || !street || !city || !state || !zip || !description || !day || !start || !end) {
+    // ✅ convert AM/PM UI to 24h "HH:MM" for storage
+    const start = time12To24(weeklyStart12);
+    const end = time12To24(weeklyEnd12);
+
+    if (!typedName || !street || !city || !state || !zip || !description || !day) {
       alert("Please fill in ALL fields (name, address, day, start, end, special).");
       return;
     }
@@ -996,7 +1067,6 @@ export default function App() {
       return;
     }
 
-    // ONLY Supabase-loaded items for name consistency (no hardcoded list)
     const addrKey = normalizeAddress(fullAddress);
     const fromExistingFlash =
       flashSpecials.find((f) => normalizeAddress(f.fullAddress) === addrKey)?.businessName ?? null;
@@ -1039,8 +1109,8 @@ export default function App() {
     setWeeklyZip("");
     setWeeklyDescription("");
     setWeeklyDay("Monday");
-    setWeeklyStart("11:00");
-    setWeeklyEnd("14:00");
+    setWeeklyStart12({ hour: 11, minute: "00", ampm: "AM" });
+    setWeeklyEnd12({ hour: 2, minute: "00", ampm: "PM" });
     setShowWeeklyForm(false);
     setWeeklyPosting(false);
 
@@ -1279,8 +1349,9 @@ export default function App() {
                 </select>
               )}
 
-              {formField("Start (HH:MM)", <input value={weeklyStart} onChange={(e) => setWeeklyStart(e.target.value)} style={styles.input} />)}
-              {formField("End (HH:MM)", <input value={weeklyEnd} onChange={(e) => setWeeklyEnd(e.target.value)} style={styles.input} />)}
+              {/* ✅ AM/PM pickers */}
+              <TimePicker12 label="Start time" value={weeklyStart12} onChange={setWeeklyStart12} />
+              <TimePicker12 label="End time" value={weeklyEnd12} onChange={setWeeklyEnd12} />
 
               <div style={{ gridColumn: "1 / -1" }}>
                 {formField(
@@ -1316,7 +1387,9 @@ export default function App() {
               </button>
             </div>
 
-            <div style={styles.microcopy}>Weekly Specials show only on the chosen weekday (and within the time window).</div>
+            <div style={styles.microcopy}>
+              Weekly Specials show only on the chosen weekday (and within the time window).
+            </div>
           </div>
         )}
       </div>
@@ -1345,9 +1418,7 @@ export default function App() {
           <div style={styles.card}>
             <div style={styles.cardTitle}>No nearby specials right now</div>
             <div style={styles.cardText}>
-              {searchTerm.trim()
-                ? "Try a different search word, or clear search."
-                : "Try increasing your distance or check back later."}
+              {searchTerm.trim() ? "Try a different search word, or clear search." : "Try increasing your distance or check back later."}
             </div>
           </div>
         ) : (
@@ -1377,23 +1448,19 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {hasFlash && <div style={styles.badgeFlash}>FLASH</div>}
-          <div style={hasActive ? styles.badgeActive : styles.badgeLater}>
-            {hasActive ? "ACTIVE" : "LATER"}
-          </div>
+          <div style={hasActive ? styles.badgeActive : styles.badgeLater}>{hasActive ? "ACTIVE" : "LATER"}</div>
         </div>
       </div>
 
       {group.flashItems.length > 0 && (
         <div style={{ marginTop: 10 }}>
           {group.flashItems.slice(0, 2).map((f, idx) => (
-            <div key={`f-${idx}`} style={styles.cardText}>
+            <div key={`${f.kind}-${idx}`} style={styles.cardText}>
               ⚡ {f.description}
             </div>
           ))}
           {group.flashItems.length > 2 && (
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
-              + {group.flashItems.length - 2} more flash
-            </div>
+            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>+ {group.flashItems.length - 2} more flash</div>
           )}
         </div>
       )}
@@ -1401,28 +1468,19 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
       {group.regularItems.length > 0 && (
         <div style={{ marginTop: group.flashItems.length > 0 ? 12 : 8 }}>
           {group.regularItems.slice(0, 2).map((r, idx) => (
-            <div key={`r-${idx}`} style={styles.cardText}>
+            <div key={`${r.kind}-${idx}`} style={styles.cardText}>
               {r.status === "active" ? "🔥" : "🕒"} {r.description}
-              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
-                {prettyWindow(r.start, r.end)}
-              </div>
+              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{prettyWindow(r.start, r.end)}</div>
             </div>
           ))}
           {group.regularItems.length > 2 && (
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
-              + {group.regularItems.length - 2} more specials
-            </div>
+            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>+ {group.regularItems.length - 2} more specials</div>
           )}
         </div>
       )}
 
       <div style={{ marginTop: 12 }}>
-        <a
-          href={mapsUrlFromAddress(group.address)}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={styles.mapLink}
-        >
+        <a href={mapsUrlFromAddress(group.address)} target="_blank" rel="noopener noreferrer" style={styles.mapLink}>
           Open in Maps
         </a>
       </div>
@@ -1445,8 +1503,7 @@ const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     padding: 16,
-    background:
-      "radial-gradient(1200px 700px at 20% -10%, rgba(0, 140, 255, 0.10), transparent 60%), #141414",
+    background: "radial-gradient(1200px 700px at 20% -10%, rgba(0, 140, 255, 0.10), transparent 60%), #141414",
     color: "#f2f2f2",
     fontFamily: '"Inter", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
     letterSpacing: 0.1,
