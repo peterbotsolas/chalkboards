@@ -4,11 +4,6 @@ import "leaflet/dist/leaflet.css";
 import { createClient } from "@supabase/supabase-js";
 
 /** =========================
- *  BUILD TAG (to confirm deploy)
- *  ========================= */
-const BUILD_TAG = "AMPM-001";
-
-/** =========================
  *  SUPABASE (your project)
  *  ========================= */
 const SUPABASE_URL = "https://jpphthbbawkxbhzonvyz.supabase.co";
@@ -103,6 +98,12 @@ function weekdayFromDate(d: Date): Weekday {
   return WEEKDAYS[d.getDay()];
 }
 
+function yesterdayFromDate(d: Date): Weekday {
+  const idx = d.getDay();
+  const y = (idx + 6) % 7;
+  return WEEKDAYS[y];
+}
+
 function toMinutes(hhmm: string): number {
   const [hh, mm] = hhmm.split(":").map((n) => parseInt(n, 10));
   return hh * 60 + mm;
@@ -142,7 +143,12 @@ function prettyWindow(start: string, end: string): string {
   return `${formatHHMMTo12(s)} – ${formatHHMMTo12(e)}`;
 }
 
-function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+function getDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
   const R = 3959; // miles
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
@@ -160,7 +166,9 @@ function minutesFromNow(ms: number): number {
   return Math.max(0, Math.ceil(ms / 60000));
 }
 
-async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+async function geocodeAddress(
+  address: string
+): Promise<{ lat: number; lng: number } | null> {
   const url =
     "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" +
     encodeURIComponent(address);
@@ -179,7 +187,9 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lng: numb
 }
 
 function mapsUrlFromAddress(address: string): string {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    address
+  )}`;
 }
 
 function isFlashActiveNow(f: FlashSpecial): boolean {
@@ -205,7 +215,10 @@ function normalizeAddress(input: string): string {
     .trim();
 }
 
-function includesSearch(query: string, ...fields: Array<string | undefined | null>): boolean {
+function includesSearch(
+  query: string,
+  ...fields: Array<string | undefined | null>
+): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
   for (const f of fields) {
@@ -254,7 +267,9 @@ function TimePicker12({
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <select
           value={value.hour}
-          onChange={(e) => onChange({ ...value, hour: parseInt(e.target.value, 10) })}
+          onChange={(e) =>
+            onChange({ ...value, hour: parseInt(e.target.value, 10) })
+          }
           style={styles.select}
         >
           {hours.map((h) => (
@@ -278,7 +293,9 @@ function TimePicker12({
 
         <select
           value={value.ampm}
-          onChange={(e) => onChange({ ...value, ampm: e.target.value as AmPm })}
+          onChange={(e) =>
+            onChange({ ...value, ampm: e.target.value as AmPm })
+          }
           style={styles.select}
         >
           <option value="AM">AM</option>
@@ -306,7 +323,9 @@ type DbSpecialRow = {
   lng: number | null;
 };
 
-function tryParseWeeklyMeta(extra: string | null): { day: Weekday; start: string; end: string } | null {
+function tryParseWeeklyMeta(
+  extra: string | null
+): { day: Weekday; start: string; end: string } | null {
   if (!extra) return null;
   try {
     const obj = JSON.parse(extra) as any;
@@ -468,7 +487,9 @@ export default function App() {
   const [userLocation, setUserLocation] = useState({ lat: 40.88, lng: -74.07 });
   const [searchTerm, setSearchTerm] = useState("");
 
-  const [dbStatus, setDbStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [dbStatus, setDbStatus] = useState<"idle" | "loading" | "ok" | "error">(
+    "idle"
+  );
   const [dbErrorText, setDbErrorText] = useState<string>("");
 
   useEffect(() => {
@@ -499,8 +520,16 @@ export default function App() {
   const [weeklyDay, setWeeklyDay] = useState<Weekday>("Monday");
 
   // AM/PM pickers (stored as 12h UI, converted to 24h on submit)
-  const [weeklyStart12, setWeeklyStart12] = useState<Time12>({ hour: 11, minute: "00", ampm: "AM" });
-  const [weeklyEnd12, setWeeklyEnd12] = useState<Time12>({ hour: 2, minute: "00", ampm: "PM" });
+  const [weeklyStart12, setWeeklyStart12] = useState<Time12>({
+    hour: 11,
+    minute: "00",
+    ampm: "AM",
+  });
+  const [weeklyEnd12, setWeeklyEnd12] = useState<Time12>({
+    hour: 2,
+    minute: "00",
+    ampm: "PM",
+  });
 
   const [weeklyPosting, setWeeklyPosting] = useState(false);
 
@@ -516,7 +545,9 @@ export default function App() {
 
       const { data, error } = await supabase
         .from("specials")
-        .select("id, created_at, type, business_name, deal, address, expires_at, status, extra, lat, lng")
+        .select(
+          "id, created_at, type, business_name, deal, address, expires_at, status, extra, lat, lng"
+        )
         .order("created_at", { ascending: false })
         .limit(400);
 
@@ -556,7 +587,9 @@ export default function App() {
     setFlashSpecials((prev) => prev.filter((f) => isFlashActiveNow(f)));
   }, [timeTick]);
 
-  const today = weekdayFromDate(new Date());
+  const todayDate = new Date();
+  const today = weekdayFromDate(todayDate);
+  const yesterday = yesterdayFromDate(todayDate);
   const nowMins = nowMinutes();
 
   const wingIcon = useMemo(
@@ -581,50 +614,85 @@ export default function App() {
     []
   );
 
+  /** =========================
+   *  TODAY ROWS (handles overnight weekly specials)
+   *  ========================= */
   const todayRows = useMemo((): TodayRow[] => {
     const rows: TodayRow[] = [];
 
     for (const w of weeklySpecials) {
-      if (w.day !== today) continue;
-
       const dist = getDistance(userLocation.lat, userLocation.lng, w.lat, w.lng);
       if (dist > radius) continue;
 
       const startM = toMinutes(w.start);
-      const endM = toMinutes(w.end);
+      const endRaw = toMinutes(w.end);
+      const crossesMidnight = endRaw <= startM;
 
-      const isActive = nowMins >= startM && nowMins <= endM;
-      const isLater = nowMins < startM;
+      // Case A: Special belongs to "today" (normal)
+      if (w.day === today) {
+        let endM = endRaw;
+        if (crossesMidnight) endM += 24 * 60;
 
-      if (isActive) {
-        rows.push({
-          businessName: w.businessName,
-          address: w.fullAddress,
-          lat: w.lat,
-          lng: w.lng,
-          start: w.start,
-          end: w.end,
-          description: w.description,
-          status: "active",
-          distance: dist,
-        });
-      } else if (isLater) {
-        rows.push({
-          businessName: w.businessName,
-          address: w.fullAddress,
-          lat: w.lat,
-          lng: w.lng,
-          start: w.start,
-          end: w.end,
-          description: w.description,
-          status: "later",
-          startsInMinutes: startM - nowMins,
-          distance: dist,
-        });
+        const nowM =
+          crossesMidnight && nowMins < startM ? nowMins + 24 * 60 : nowMins;
+
+        const isActive = nowM >= startM && nowM <= endM;
+        const isLater = nowM < startM;
+
+        if (isActive) {
+          rows.push({
+            businessName: w.businessName,
+            address: w.fullAddress,
+            lat: w.lat,
+            lng: w.lng,
+            start: w.start,
+            end: w.end,
+            description: w.description,
+            status: "active",
+            distance: dist,
+          });
+        } else if (isLater) {
+          rows.push({
+            businessName: w.businessName,
+            address: w.fullAddress,
+            lat: w.lat,
+            lng: w.lng,
+            start: w.start,
+            end: w.end,
+            description: w.description,
+            status: "later",
+            startsInMinutes: startM - nowM,
+            distance: dist,
+          });
+        }
+        continue;
+      }
+
+      // Case B: It's after midnight and we're still in the "tail" of yesterday's overnight special
+      if (crossesMidnight && w.day === yesterday) {
+        const endM = endRaw + 24 * 60;
+        const nowM = nowMins + 24 * 60; // compare in the "next-day" space
+
+        const isActive = nowM >= startM && nowM <= endM;
+        if (isActive) {
+          rows.push({
+            businessName: w.businessName,
+            address: w.fullAddress,
+            lat: w.lat,
+            lng: w.lng,
+            start: w.start,
+            end: w.end,
+            description: w.description,
+            status: "active",
+            distance: dist,
+          });
+        }
       }
     }
 
-    const filtered = rows.filter((r) => includesSearch(searchTerm, r.businessName, r.address, r.description));
+    const filtered = rows.filter((r) =>
+      includesSearch(searchTerm, r.businessName, r.address, r.description)
+    );
 
     filtered.sort((a, b) => {
       if (a.status !== b.status) return a.status === "active" ? -1 : 1;
@@ -635,7 +703,7 @@ export default function App() {
     });
 
     return filtered;
-  }, [today, nowMins, userLocation, radius, weeklySpecials, searchTerm]);
+  }, [today, yesterday, nowMins, userLocation, radius, weeklySpecials, searchTerm]);
 
   const activeFlashInRadiusSorted = useMemo(() => {
     return flashSpecials
@@ -645,14 +713,21 @@ export default function App() {
         distance: getDistance(userLocation.lat, userLocation.lng, f.lat, f.lng),
       }))
       .filter((x) => x.distance <= radius)
-      .filter(({ f }) => includesSearch(searchTerm, f.businessName, f.fullAddress, f.description))
+      .filter(({ f }) =>
+        includesSearch(searchTerm, f.businessName, f.fullAddress, f.description)
+      )
       .sort((a, b) => a.distance - b.distance);
   }, [flashSpecials, timeTick, userLocation, radius, searchTerm]);
 
   const groupedTopFeed = useMemo((): GroupedFeed[] => {
     const map = new Map<string, GroupedFeed>();
 
-    const addGroupIfNeeded = (key: string, businessName: string, address: string, distance: number) => {
+    const addGroupIfNeeded = (
+      key: string,
+      businessName: string,
+      address: string,
+      distance: number
+    ) => {
       if (!map.has(key)) {
         map.set(key, {
           key,
@@ -741,10 +816,14 @@ export default function App() {
    *  ========================= */
   useEffect(() => {
     if (mapContainerRef.current && !mapRef.current) {
-      mapRef.current = L.map(mapContainerRef.current).setView([userLocation.lat, userLocation.lng], 11);
+      mapRef.current = L.map(mapContainerRef.current).setView(
+        [userLocation.lat, userLocation.lng],
+        11
+      );
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
-        attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        attribution:
+          '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(mapRef.current);
     }
 
@@ -811,15 +890,24 @@ export default function App() {
       }
 
       if (patch.flashLines?.length) existing.flashLines.push(...patch.flashLines);
-      if (patch.regularLines?.length) existing.regularLines.push(...patch.regularLines);
+      if (patch.regularLines?.length)
+        existing.regularLines.push(...patch.regularLines);
 
-      if (typeof patch.distanceHint === "number" && patch.distanceHint < existing.distanceHint) {
+      if (
+        typeof patch.distanceHint === "number" &&
+        patch.distanceHint < existing.distanceHint
+      ) {
         existing.distanceHint = patch.distanceHint;
       }
     };
 
     const esc = (s: string) =>
-      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+      s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 
     // Regular
     todayRows.forEach((row) => {
@@ -830,7 +918,12 @@ export default function App() {
         lat: row.lat,
         lng: row.lng,
         distanceHint: row.distance ?? 999999,
-        regularLines: [`${row.status === "active" ? "🔥" : "🕒"} ${row.description} (${prettyWindow(row.start, row.end)})`],
+        regularLines: [
+          `${row.status === "active" ? "🔥" : "🕒"} ${row.description} (${prettyWindow(
+            row.start,
+            row.end
+          )})`,
+        ],
       });
     });
 
@@ -857,7 +950,10 @@ export default function App() {
         flashLines.length > 0
           ? `<div style="margin-top:8px;">
               <div><b>Flash</b></div>
-              ${flashLines.slice(0, 3).map((x) => `<div>${esc(x)}</div>`).join("")}
+              ${flashLines
+                .slice(0, 3)
+                .map((x) => `<div>${esc(x)}</div>`)
+                .join("")}
             </div>`
           : "";
 
@@ -865,17 +961,26 @@ export default function App() {
         regularLines.length > 0
           ? `<div style="margin-top:8px;">
               <div><b>Today</b></div>
-              ${regularLines.slice(0, 3).map((x) => `<div>${esc(x)}</div>`).join("")}
+              ${regularLines
+                .slice(0, 3)
+                .map((x) => `<div>${esc(x)}</div>`)
+                .join("")}
             </div>`
           : "";
 
       const mapsLink = `<div style="margin-top:10px;">
-          <a href="${mapsUrlFromAddress(b.address)}" target="_blank" rel="noopener noreferrer">Open in Maps</a>
+          <a href="${mapsUrlFromAddress(
+            b.address
+          )}" target="_blank" rel="noopener noreferrer">Open in Maps</a>
         </div>`;
 
-      const popupHtml = `<b>${esc(b.businessName || "Business")}</b><br>${esc(b.address)}${flashHtml}${regularHtml}${mapsLink}`;
+      const popupHtml = `<b>${esc(b.businessName || "Business")}</b><br>${esc(
+        b.address
+      )}${flashHtml}${regularHtml}${mapsLink}`;
 
-      const marker = L.marker([b.lat, b.lng], { icon: wingIcon }).addTo(mapRef.current!).bindPopup(popupHtml);
+      const marker = L.marker([b.lat, b.lng], { icon: wingIcon })
+        .addTo(mapRef.current!)
+        .bindPopup(popupHtml);
       markersRef.current.push(marker);
     });
   }, [todayRows, wingIcon, activeFlashInRadiusSorted]);
@@ -887,14 +992,20 @@ export default function App() {
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+          const newLocation = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          };
           setUserLocation(newLocation);
 
           if (mapRef.current) {
             mapRef.current.setView([newLocation.lat, newLocation.lng], 12);
 
             if (userMarkerRef.current) userMarkerRef.current.remove();
-            userMarkerRef.current = L.marker([newLocation.lat, newLocation.lng], { icon: userIcon })
+            userMarkerRef.current = L.marker(
+              [newLocation.lat, newLocation.lng],
+              { icon: userIcon }
+            )
               .addTo(mapRef.current)
               .bindPopup("You are here")
               .openPopup();
@@ -921,7 +1032,9 @@ export default function App() {
     const description = flashDescription.trim();
 
     if (!typedName || !street || !city || !state || !zip || !description) {
-      alert("Please fill in ALL fields: business name, street, city, state, zip, and special.");
+      alert(
+        "Please fill in ALL fields: business name, street, city, state, zip, and special."
+      );
       return;
     }
 
@@ -932,7 +1045,9 @@ export default function App() {
 
     if (!coords) {
       setFlashPosting(false);
-      alert("Could not find that address. Please double-check the street, city, state, and ZIP.");
+      alert(
+        "Could not find that address. Please double-check the street, city, state, and ZIP."
+      );
       return;
     }
 
@@ -941,9 +1056,11 @@ export default function App() {
 
     const addrKey = normalizeAddress(fullAddress);
     const fromExistingFlash =
-      flashSpecials.find((f) => normalizeAddress(f.fullAddress) === addrKey)?.businessName ?? null;
+      flashSpecials.find((f) => normalizeAddress(f.fullAddress) === addrKey)
+        ?.businessName ?? null;
     const fromWeekly =
-      weeklySpecials.find((w) => normalizeAddress(w.fullAddress) === addrKey)?.businessName ?? null;
+      weeklySpecials.find((w) => normalizeAddress(w.fullAddress) === addrKey)
+        ?.businessName ?? null;
 
     const canonicalName = fromWeekly ?? fromExistingFlash ?? typedName;
 
@@ -964,7 +1081,9 @@ export default function App() {
     if (error) {
       console.log("SUPABASE INSERT ERROR:", error);
       setFlashPosting(false);
-      alert("Flash special could not save to the database.\n\nOpen Console and copy the error to me.");
+      alert(
+        "Flash special could not save to the database.\n\nOpen Console and copy the error to me."
+      );
       return;
     }
 
@@ -985,6 +1104,7 @@ export default function App() {
 
   /** =========================
    *  WEEKLY SUBMIT -> SUPABASE (AM/PM UI, stores HH:MM 24h)
+   *  - allows overnight (end after midnight)
    *  ========================= */
   const addWeeklySpecial = async () => {
     if (weeklyPosting) return;
@@ -1010,12 +1130,10 @@ export default function App() {
       return;
     }
 
+    // validation that allows overnight
     const startM = toMinutes(start);
-    const endM = toMinutes(end);
-    if (endM < startM) {
-      alert("For now, End time must be AFTER Start time (same-day weekly special).");
-      return;
-    }
+    let endM = toMinutes(end);
+    if (endM <= startM) endM += 24 * 60; // overnight ok
 
     const fullAddress = `${street}, ${city}, ${state} ${zip}`;
 
@@ -1078,25 +1196,38 @@ export default function App() {
 
   const [hovered, setHovered] = useState<string | null>(null);
 
-  const buttonStyle = (key: string, variant: "primary" | "secondary" = "primary"): React.CSSProperties => {
+  const buttonStyle = (
+    key: string,
+    variant: "primary" | "secondary" = "primary"
+  ): React.CSSProperties => {
     const base =
       variant === "primary"
-        ? { background: "rgba(0, 140, 255, 0.18)", border: "1px solid rgba(0, 140, 255, 0.38)" }
-        : { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)" };
+        ? {
+            background: "rgba(0, 140, 255, 0.18)",
+            border: "1px solid rgba(0, 140, 255, 0.38)",
+          }
+        : {
+            background: "rgba(255,255,255,0.06)",
+            border: "1px solid rgba(255,255,255,0.14)",
+          };
 
     const isHover = hovered === key;
     return {
       ...styles.buttonBase,
       ...base,
       transform: isHover ? "translateY(-1px)" : "translateY(0)",
-      boxShadow: isHover ? "0 10px 24px rgba(0,0,0,0.35)" : "0 6px 18px rgba(0,0,0,0.25)",
+      boxShadow: isHover
+        ? "0 10px 24px rgba(0,0,0,0.35)"
+        : "0 6px 18px rgba(0,0,0,0.25)",
       filter: isHover ? "brightness(1.08)" : "brightness(1)",
       opacity: 1,
     };
   };
 
   const resultsCount = useMemo(() => {
-    const regularCount = todayRows.filter((r) => (showLaterToday ? true : r.status === "active")).length;
+    const regularCount = todayRows.filter((r) =>
+      showLaterToday ? true : r.status === "active"
+    ).length;
     const flashCount = activeFlashInRadiusSorted.length;
     return { regularCount, flashCount, total: regularCount + flashCount };
   }, [todayRows, showLaterToday, activeFlashInRadiusSorted]);
@@ -1114,7 +1245,9 @@ export default function App() {
         <div style={styles.title}>Chalkboards</div>
 
         <div style={styles.subtitle}>
-          <span style={{ opacity: 0.9 }}>{"Live Local Specials - Posted By Real People Today"}</span>
+          <span style={{ opacity: 0.9 }}>
+            {"Live Local Specials - Posted By Real People Today"}
+          </span>
           <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
           <b style={{ fontWeight: 700 }}>{today}</b>
           <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
@@ -1132,15 +1265,16 @@ export default function App() {
             ) : dbStatus === "error" ? (
               <span style={{ color: "#ff6b6b" }}>
                 <b>Blocked</b>
-                {dbErrorText ? <span style={{ marginLeft: 8, opacity: 0.9 }}>({dbErrorText})</span> : null}
+                {dbErrorText ? (
+                  <span style={{ marginLeft: 8, opacity: 0.9 }}>
+                    ({dbErrorText})
+                  </span>
+                ) : null}
               </span>
             ) : (
               <b>—</b>
             )}
           </span>
-
-          <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
-          <span style={{ opacity: 0.85, fontFamily: "monospace" }}>BUILD: {BUILD_TAG}</span>
         </div>
       </div>
 
@@ -1149,7 +1283,11 @@ export default function App() {
           <div style={styles.groupLeft}>
             <div style={styles.field}>
               <div style={styles.label}>Distance</div>
-              <select value={radius} onChange={(e) => setRadius(parseFloat(e.target.value))} style={styles.select}>
+              <select
+                value={radius}
+                onChange={(e) => setRadius(parseFloat(e.target.value))}
+                style={styles.select}
+              >
                 <option value="0.5">0.5 mi</option>
                 <option value="1">1 mi</option>
                 <option value="2">2 mi</option>
@@ -1178,18 +1316,6 @@ export default function App() {
                 </button>
               )}
             </div>
-
-            <button
-              onClick={() => {
-                // quick sanity: show build tag
-                alert(`Build: ${BUILD_TAG}`);
-              }}
-              style={buttonStyle("buildcheck", "secondary")}
-              onMouseEnter={() => setHovered("buildcheck")}
-              onMouseLeave={() => setHovered(null)}
-            >
-              Build Check
-            </button>
 
             <button
               onClick={handleLocateMe}
@@ -1224,12 +1350,17 @@ export default function App() {
 
         <div style={styles.controlsFooterRow}>
           <label style={styles.togglePill}>
-            <input type="checkbox" checked={showLaterToday} onChange={(e) => setShowLaterToday(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={showLaterToday}
+              onChange={(e) => setShowLaterToday(e.target.checked)}
+            />
             <span style={{ marginLeft: 8 }}>Include upcoming specials</span>
           </label>
 
           <div style={styles.hintText}>
-            Showing nearby deals within your chosen <span style={{ fontWeight: 600, opacity: 1 }}>distance</span>.
+            Showing nearby deals within your chosen{" "}
+            <span style={{ fontWeight: 600, opacity: 1 }}>distance</span>.
             {searchTerm.trim() ? (
               <span style={{ marginLeft: 10, opacity: 0.85 }}>
                 • Search results: <b>{resultsCount.total}</b>
@@ -1244,11 +1375,46 @@ export default function App() {
             <div style={styles.formTitle}>Post a Flash Special (same-day)</div>
 
             <div style={styles.formGrid}>
-              {formField("Business name", <input value={flashBusinessName} onChange={(e) => setFlashBusinessName(e.target.value)} style={styles.input} />)}
-              {formField("Street", <input value={flashStreet} onChange={(e) => setFlashStreet(e.target.value)} style={styles.input} />)}
-              {formField("City", <input value={flashCity} onChange={(e) => setFlashCity(e.target.value)} style={styles.input} />)}
-              {formField("State", <input value={flashState} onChange={(e) => setFlashState(e.target.value)} style={styles.input} />)}
-              {formField("ZIP", <input value={flashZip} onChange={(e) => setFlashZip(e.target.value)} style={styles.input} />)}
+              {formField(
+                "Business name",
+                <input
+                  value={flashBusinessName}
+                  onChange={(e) => setFlashBusinessName(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "Street",
+                <input
+                  value={flashStreet}
+                  onChange={(e) => setFlashStreet(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "City",
+                <input
+                  value={flashCity}
+                  onChange={(e) => setFlashCity(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "State",
+                <input
+                  value={flashState}
+                  onChange={(e) => setFlashState(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "ZIP",
+                <input
+                  value={flashZip}
+                  onChange={(e) => setFlashZip(e.target.value)}
+                  style={styles.input}
+                />
+              )}
               {formField(
                 "Duration (minutes)",
                 <input
@@ -1256,7 +1422,9 @@ export default function App() {
                   min={15}
                   max={720}
                   value={flashDurationMins}
-                  onChange={(e) => setFlashDurationMins(parseInt(e.target.value || "120", 10))}
+                  onChange={(e) =>
+                    setFlashDurationMins(parseInt(e.target.value || "120", 10))
+                  }
                   style={styles.input}
                 />
               )}
@@ -1277,7 +1445,10 @@ export default function App() {
               <button
                 onClick={addFlashSpecial}
                 disabled={flashPosting}
-                style={{ ...buttonStyle("flashsubmit", "primary"), opacity: flashPosting ? 0.6 : 1 }}
+                style={{
+                  ...buttonStyle("flashsubmit", "primary"),
+                  opacity: flashPosting ? 0.6 : 1,
+                }}
                 onMouseEnter={() => setHovered("flashsubmit")}
                 onMouseLeave={() => setHovered(null)}
               >
@@ -1294,7 +1465,9 @@ export default function App() {
               </button>
             </div>
 
-            <div style={styles.microcopy}>Flash Specials expire automatically. We use the address to drop a pin on the map.</div>
+            <div style={styles.microcopy}>
+              Flash Specials expire automatically. We use the address to drop a pin on the map.
+            </div>
           </div>
         )}
 
@@ -1304,15 +1477,54 @@ export default function App() {
             <div style={styles.formTitle}>Post a Weekly Special (recurring)</div>
 
             <div style={styles.formGrid}>
-              {formField("Business name", <input value={weeklyBusinessName} onChange={(e) => setWeeklyBusinessName(e.target.value)} style={styles.input} />)}
-              {formField("Street", <input value={weeklyStreet} onChange={(e) => setWeeklyStreet(e.target.value)} style={styles.input} />)}
-              {formField("City", <input value={weeklyCity} onChange={(e) => setWeeklyCity(e.target.value)} style={styles.input} />)}
-              {formField("State", <input value={weeklyState} onChange={(e) => setWeeklyState(e.target.value)} style={styles.input} />)}
-              {formField("ZIP", <input value={weeklyZip} onChange={(e) => setWeeklyZip(e.target.value)} style={styles.input} />)}
+              {formField(
+                "Business name",
+                <input
+                  value={weeklyBusinessName}
+                  onChange={(e) => setWeeklyBusinessName(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "Street",
+                <input
+                  value={weeklyStreet}
+                  onChange={(e) => setWeeklyStreet(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "City",
+                <input
+                  value={weeklyCity}
+                  onChange={(e) => setWeeklyCity(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "State",
+                <input
+                  value={weeklyState}
+                  onChange={(e) => setWeeklyState(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "ZIP",
+                <input
+                  value={weeklyZip}
+                  onChange={(e) => setWeeklyZip(e.target.value)}
+                  style={styles.input}
+                />
+              )}
 
               {formField(
                 "Day",
-                <select value={weeklyDay} onChange={(e) => setWeeklyDay(e.target.value as Weekday)} style={styles.select}>
+                <select
+                  value={weeklyDay}
+                  onChange={(e) => setWeeklyDay(e.target.value as Weekday)}
+                  style={styles.select}
+                >
                   {WEEKDAYS.map((d) => (
                     <option key={d} value={d}>
                       {d}
@@ -1325,7 +1537,11 @@ export default function App() {
               <TimePicker12 label="End" value={weeklyEnd12} onChange={setWeeklyEnd12} />
 
               <div style={{ gridColumn: "1 / -1", fontSize: 12, opacity: 0.9 }}>
-                You chose: <b>{prettyTime12(weeklyStart12)}</b> – <b>{prettyTime12(weeklyEnd12)}</b>
+                You chose: <b>{prettyTime12(weeklyStart12)}</b> –{" "}
+                <b>{prettyTime12(weeklyEnd12)}</b>
+                <span style={{ marginLeft: 8, opacity: 0.8 }}>
+                  (Overnight is allowed)
+                </span>
               </div>
 
               <div style={{ gridColumn: "1 / -1" }}>
@@ -1345,7 +1561,10 @@ export default function App() {
               <button
                 onClick={addWeeklySpecial}
                 disabled={weeklyPosting}
-                style={{ ...buttonStyle("weeklysubmit", "primary"), opacity: weeklyPosting ? 0.6 : 1 }}
+                style={{
+                  ...buttonStyle("weeklysubmit", "primary"),
+                  opacity: weeklyPosting ? 0.6 : 1,
+                }}
                 onMouseEnter={() => setHovered("weeklysubmit")}
                 onMouseLeave={() => setHovered(null)}
               >
@@ -1362,7 +1581,9 @@ export default function App() {
               </button>
             </div>
 
-            <div style={styles.microcopy}>Weekly Specials show only on the chosen weekday (and within the time window).</div>
+            <div style={styles.microcopy}>
+              Weekly Specials show on the chosen weekday (and overnight tails show after midnight).
+            </div>
           </div>
         )}
       </div>
@@ -1373,9 +1594,13 @@ export default function App() {
         <div style={styles.sectionHeaderRow}>
           <div style={styles.sectionTitle}>Top 5 Near You</div>
           <div style={styles.sectionMeta}>
-            <span style={{ opacity: 0.9 }}>{radius === 999 ? "Anywhere" : `${radius} mi`}</span>
+            <span style={{ opacity: 0.9 }}>
+              {radius === 999 ? "Anywhere" : `${radius} mi`}
+            </span>
             <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
-            <span style={{ opacity: 0.8 }}>{showLaterToday ? "Including later today" : "Active now only"}</span>
+            <span style={{ opacity: 0.8 }}>
+              {showLaterToday ? "Including later today" : "Active now only"}
+            </span>
             {searchTerm.trim() ? (
               <>
                 <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
@@ -1391,7 +1616,9 @@ export default function App() {
           <div style={styles.card}>
             <div style={styles.cardTitle}>No nearby specials right now</div>
             <div style={styles.cardText}>
-              {searchTerm.trim() ? "Try a different search word, or clear search." : "Try increasing your distance or check back later."}
+              {searchTerm.trim()
+                ? "Try a different search word, or clear search."
+                : "Try increasing your distance or check back later."}
             </div>
           </div>
         ) : (
@@ -1399,7 +1626,9 @@ export default function App() {
         )}
       </div>
 
-      <div style={styles.footer}>Closest deals show first (within your chosen distance).</div>
+      <div style={styles.footer}>
+        Closest deals show first (within your chosen distance).
+      </div>
     </div>
   );
 }
@@ -1421,7 +1650,9 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {hasFlash && <div style={styles.badgeFlash}>FLASH</div>}
-          <div style={hasActive ? styles.badgeActive : styles.badgeLater}>{hasActive ? "ACTIVE" : "LATER"}</div>
+          <div style={hasActive ? styles.badgeActive : styles.badgeLater}>
+            {hasActive ? "ACTIVE" : "LATER"}
+          </div>
         </div>
       </div>
 
@@ -1433,7 +1664,9 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
             </div>
           ))}
           {group.flashItems.length > 2 && (
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>+ {group.flashItems.length - 2} more flash</div>
+            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
+              + {group.flashItems.length - 2} more flash
+            </div>
           )}
         </div>
       )}
@@ -1443,17 +1676,26 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
           {group.regularItems.slice(0, 2).map((r, idx) => (
             <div key={`r-${idx}`} style={styles.cardText}>
               {r.status === "active" ? "🔥" : "🕒"} {r.description}
-              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{prettyWindow(r.start, r.end)}</div>
+              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
+                {prettyWindow(r.start, r.end)}
+              </div>
             </div>
           ))}
           {group.regularItems.length > 2 && (
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>+ {group.regularItems.length - 2} more specials</div>
+            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
+              + {group.regularItems.length - 2} more specials
+            </div>
           )}
         </div>
       )}
 
       <div style={{ marginTop: 12 }}>
-        <a href={mapsUrlFromAddress(group.address)} target="_blank" rel="noopener noreferrer" style={styles.mapLink}>
+        <a
+          href={mapsUrlFromAddress(group.address)}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={styles.mapLink}
+        >
           Open in Maps
         </a>
       </div>
@@ -1476,16 +1718,19 @@ const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     padding: 16,
-    background: "radial-gradient(1200px 700px at 20% -10%, rgba(0, 140, 255, 0.10), transparent 60%), #141414",
+    background:
+      "radial-gradient(1200px 700px at 20% -10%, rgba(0, 140, 255, 0.10), transparent 60%), #141414",
     color: "#f2f2f2",
-    fontFamily: '"Inter", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
+    fontFamily:
+      '"Inter", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
     letterSpacing: 0.1,
     lineHeight: 1.35,
   },
   header: {
     padding: 14,
     borderRadius: 18,
-    background: "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
     border: "1px solid rgba(255,255,255,0.10)",
     boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
     marginBottom: 12,
@@ -1494,7 +1739,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 36,
     fontWeight: 900,
     letterSpacing: 0.6,
-    fontFamily: '"Permanent Marker", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
+    fontFamily:
+      '"Permanent Marker", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
   },
   subtitle: { marginTop: 6, opacity: 0.92, fontSize: 14 },
 
@@ -1514,7 +1760,13 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
   },
   groupLeft: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
-  groupRight: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" },
+  groupRight: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
 
   controlsFooterRow: {
     display: "flex",
@@ -1635,7 +1887,8 @@ const styles: Record<string, React.CSSProperties> = {
   card: {
     padding: 14,
     borderRadius: 18,
-    background: "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
     border: "1px solid rgba(255,255,255,0.10)",
     marginBottom: 10,
     boxShadow: "0 10px 26px rgba(0,0,0,0.30)",
