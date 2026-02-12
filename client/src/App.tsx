@@ -1242,7 +1242,19 @@ export default function App() {
   return (
     <div style={styles.page}>
       <div style={styles.header}>
-        <div style={styles.title}>Chalkboards</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <img
+            src="/chalkboards-logo.png"
+            alt="Chalkboards"
+            style={{
+              height: 60,
+              width: "auto",
+              display: "block",
+              filter: "drop-shadow(0 6px 14px rgba(0,0,0,0.35))",
+            }}
+          />
+          <div style={styles.title}>Chalkboards</div>
+        </div>
 
         <div style={styles.subtitle}>
           <span style={{ opacity: 0.9 }}>
