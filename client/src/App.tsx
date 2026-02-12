@@ -1244,7 +1244,7 @@ export default function App() {
       <div style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <img
-            src="/chalkboards-logo.png"
+            src="/chalkboards-logo.jpg"
             alt="Chalkboards"
             style={{
               height: 60,
