@@ -48,8 +48,8 @@ type WeeklySpecial = {
   lat: number;
   lng: number;
   day: Weekday;
-  start: string; // stored "HH:MM" 24h
-  end: string; // stored "HH:MM" 24h
+  start: string; // "HH:MM" 24h
+  end: string; // "HH:MM" 24h (can be "smaller" than start = overnight)
   description: string;
   createdAt: number;
 };
@@ -143,12 +143,7 @@ function prettyWindow(start: string, end: string): string {
   return `${formatHHMMTo12(s)} – ${formatHHMMTo12(e)}`;
 }
 
-function getDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 3959; // miles
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
@@ -187,9 +182,7 @@ async function geocodeAddress(
 }
 
 function mapsUrlFromAddress(address: string): string {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    address
-  )}`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 }
 
 function isFlashActiveNow(f: FlashSpecial): boolean {
@@ -215,10 +208,7 @@ function normalizeAddress(input: string): string {
     .trim();
 }
 
-function includesSearch(
-  query: string,
-  ...fields: Array<string | undefined | null>
-): boolean {
+function includesSearch(query: string, ...fields: Array<string | undefined | null>): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
   for (const f of fields) {
@@ -267,9 +257,7 @@ function TimePicker12({
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <select
           value={value.hour}
-          onChange={(e) =>
-            onChange({ ...value, hour: parseInt(e.target.value, 10) })
-          }
+          onChange={(e) => onChange({ ...value, hour: parseInt(e.target.value, 10) })}
           style={styles.select}
         >
           {hours.map((h) => (
@@ -293,9 +281,7 @@ function TimePicker12({
 
         <select
           value={value.ampm}
-          onChange={(e) =>
-            onChange({ ...value, ampm: e.target.value as AmPm })
-          }
+          onChange={(e) => onChange({ ...value, ampm: e.target.value as AmPm })}
           style={styles.select}
         >
           <option value="AM">AM</option>
@@ -318,30 +304,46 @@ type DbSpecialRow = {
   address: string | null;
   expires_at: string | null;
   status: string | null;
-  extra: string | null; // JSON string: { day, start, end }
+  extra: any; // text or json; we normalize it safely
   lat: number | null;
   lng: number | null;
 };
 
-function tryParseWeeklyMeta(
-  extra: string | null
-): { day: Weekday; start: string; end: string } | null {
+function tryParseWeeklyMeta(extra: any): { day: Weekday; start: string; end: string } | null {
   if (!extra) return null;
+
   try {
-    const obj = JSON.parse(extra) as any;
+    const obj = typeof extra === "string" ? JSON.parse(extra) : extra;
     if (!obj) return null;
+
     const day = obj.day as Weekday;
     const start = String(obj.start ?? "");
     const end = String(obj.end ?? "");
     if (!day || !start || !end) return null;
+
     return { day, start, end };
   } catch {
     return null;
   }
 }
 
+function splitAddress(fullAddress: string): { street: string; city: string; state: string; zip: string } {
+  const parts = fullAddress.split(",").map((x) => x.trim());
+  const street = parts[0] ?? "";
+  const city = parts[1] ?? "";
+  let state = "";
+  let zip = "";
+  if (parts[2]) {
+    const p = parts[2].split(" ").filter(Boolean);
+    state = p[0] ?? "";
+    zip = p[1] ?? "";
+  }
+  return { street, city, state, zip };
+}
+
 function rowsToFlash(rows: DbSpecialRow[]): FlashSpecial[] {
   const list: FlashSpecial[] = [];
+
   for (const r of rows) {
     if (r.type !== "flash") continue;
     if (r.status !== "approved") continue;
@@ -353,17 +355,7 @@ function rowsToFlash(rows: DbSpecialRow[]): FlashSpecial[] {
     const expiresAt = new Date(r.expires_at).getTime();
     if (!Number.isFinite(createdAt) || !Number.isFinite(expiresAt)) continue;
 
-    const fullAddress = r.address;
-    const parts = fullAddress.split(",").map((x) => x.trim());
-    const street = parts[0] ?? "";
-    const city = parts[1] ?? "";
-    let state = "";
-    let zip = "";
-    if (parts[2]) {
-      const p = parts[2].split(" ").filter(Boolean);
-      state = p[0] ?? "";
-      zip = p[1] ?? "";
-    }
+    const { street, city, state, zip } = splitAddress(r.address);
 
     list.push({
       id: r.id,
@@ -372,7 +364,7 @@ function rowsToFlash(rows: DbSpecialRow[]): FlashSpecial[] {
       city,
       state,
       zip,
-      fullAddress,
+      fullAddress: r.address,
       lat: r.lat,
       lng: r.lng,
       description: r.deal,
@@ -380,11 +372,13 @@ function rowsToFlash(rows: DbSpecialRow[]): FlashSpecial[] {
       expiresAt,
     });
   }
+
   return list.filter(isFlashActiveNow);
 }
 
 function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
   const list: WeeklySpecial[] = [];
+
   for (const r of rows) {
     if (r.type !== "weekly") continue;
     if (r.status !== "approved") continue;
@@ -397,17 +391,7 @@ function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
     const createdAt = new Date(r.created_at).getTime();
     if (!Number.isFinite(createdAt)) continue;
 
-    const fullAddress = r.address;
-    const parts = fullAddress.split(",").map((x) => x.trim());
-    const street = parts[0] ?? "";
-    const city = parts[1] ?? "";
-    let state = "";
-    let zip = "";
-    if (parts[2]) {
-      const p = parts[2].split(" ").filter(Boolean);
-      state = p[0] ?? "";
-      zip = p[1] ?? "";
-    }
+    const { street, city, state, zip } = splitAddress(r.address);
 
     list.push({
       id: r.id,
@@ -416,7 +400,7 @@ function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
       city,
       state,
       zip,
-      fullAddress,
+      fullAddress: r.address,
       lat: r.lat,
       lng: r.lng,
       day: meta.day,
@@ -426,6 +410,7 @@ function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
       createdAt,
     });
   }
+
   return list;
 }
 
@@ -483,13 +468,14 @@ export default function App() {
   const userMarkerRef = useRef<L.Marker | null>(null);
 
   const [showLaterToday, setShowLaterToday] = useState(true);
-  const [radius, setRadius] = useState(5);
+
+  // ✅ default to Anywhere so you SEE your approved rows immediately
+  const [radius, setRadius] = useState(999);
+
   const [userLocation, setUserLocation] = useState({ lat: 40.88, lng: -74.07 });
   const [searchTerm, setSearchTerm] = useState("");
 
-  const [dbStatus, setDbStatus] = useState<"idle" | "loading" | "ok" | "error">(
-    "idle"
-  );
+  const [dbStatus, setDbStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [dbErrorText, setDbErrorText] = useState<string>("");
 
   useEffect(() => {
@@ -519,7 +505,6 @@ export default function App() {
   const [weeklyDescription, setWeeklyDescription] = useState("");
   const [weeklyDay, setWeeklyDay] = useState<Weekday>("Monday");
 
-  // AM/PM pickers (stored as 12h UI, converted to 24h on submit)
   const [weeklyStart12, setWeeklyStart12] = useState<Time12>({
     hour: 11,
     minute: "00",
@@ -545,9 +530,7 @@ export default function App() {
 
       const { data, error } = await supabase
         .from("specials")
-        .select(
-          "id, created_at, type, business_name, deal, address, expires_at, status, extra, lat, lng"
-        )
+        .select("id, created_at, type, business_name, deal, address, expires_at, status, extra, lat, lng")
         .order("created_at", { ascending: false })
         .limit(400);
 
@@ -615,7 +598,8 @@ export default function App() {
   );
 
   /** =========================
-   *  TODAY ROWS (handles overnight weekly specials)
+   *  TODAY ROWS ✅ FIXED (no crash)
+   *  - Handles overnight weekly specials
    *  ========================= */
   const todayRows = useMemo((): TodayRow[] => {
     const rows: TodayRow[] = [];
@@ -628,13 +612,13 @@ export default function App() {
       const endRaw = toMinutes(w.end);
       const crossesMidnight = endRaw <= startM;
 
-      // Case A: Special belongs to "today" (normal)
+      // Case A: Special is scheduled for TODAY
       if (w.day === today) {
         let endM = endRaw;
         if (crossesMidnight) endM += 24 * 60;
 
-        const nowM =
-          crossesMidnight && nowMins < startM ? nowMins + 24 * 60 : nowMins;
+        let nowM = nowMins;
+        if (crossesMidnight && nowMins < startM) nowM += 24 * 60;
 
         const isActive = nowM >= startM && nowM <= endM;
         const isLater = nowM < startM;
@@ -665,13 +649,14 @@ export default function App() {
             distance: dist,
           });
         }
+
         continue;
       }
 
-      // Case B: It's after midnight and we're still in the "tail" of yesterday's overnight special
+      // Case B: After midnight, still in YESTERDAY's overnight tail
       if (crossesMidnight && w.day === yesterday) {
         const endM = endRaw + 24 * 60;
-        const nowM = nowMins + 24 * 60; // compare in the "next-day" space
+        const nowM = nowMins + 24 * 60;
 
         const isActive = nowM >= startM && nowM <= endM;
         if (isActive) {
@@ -713,21 +698,14 @@ export default function App() {
         distance: getDistance(userLocation.lat, userLocation.lng, f.lat, f.lng),
       }))
       .filter((x) => x.distance <= radius)
-      .filter(({ f }) =>
-        includesSearch(searchTerm, f.businessName, f.fullAddress, f.description)
-      )
+      .filter(({ f }) => includesSearch(searchTerm, f.businessName, f.fullAddress, f.description))
       .sort((a, b) => a.distance - b.distance);
   }, [flashSpecials, timeTick, userLocation, radius, searchTerm]);
 
   const groupedTopFeed = useMemo((): GroupedFeed[] => {
     const map = new Map<string, GroupedFeed>();
 
-    const addGroupIfNeeded = (
-      key: string,
-      businessName: string,
-      address: string,
-      distance: number
-    ) => {
+    const addGroupIfNeeded = (key: string, businessName: string, address: string, distance: number) => {
       if (!map.has(key)) {
         map.set(key, {
           key,
@@ -809,7 +787,7 @@ export default function App() {
     });
 
     return list.slice(0, 5);
-  }, [todayRows, activeFlashInRadiusSorted, showLaterToday, timeTick]);
+  }, [todayRows, activeFlashInRadiusSorted, showLaterToday]);
 
   /** =========================
    *  MAP INIT (once)
@@ -890,13 +868,9 @@ export default function App() {
       }
 
       if (patch.flashLines?.length) existing.flashLines.push(...patch.flashLines);
-      if (patch.regularLines?.length)
-        existing.regularLines.push(...patch.regularLines);
+      if (patch.regularLines?.length) existing.regularLines.push(...patch.regularLines);
 
-      if (
-        typeof patch.distanceHint === "number" &&
-        patch.distanceHint < existing.distanceHint
-      ) {
+      if (typeof patch.distanceHint === "number" && patch.distanceHint < existing.distanceHint) {
         existing.distanceHint = patch.distanceHint;
       }
     };
@@ -919,10 +893,7 @@ export default function App() {
         lng: row.lng,
         distanceHint: row.distance ?? 999999,
         regularLines: [
-          `${row.status === "active" ? "🔥" : "🕒"} ${row.description} (${prettyWindow(
-            row.start,
-            row.end
-          )})`,
+          `${row.status === "active" ? "🔥" : "🕒"} ${row.description} (${prettyWindow(row.start, row.end)})`,
         ],
       });
     });
@@ -969,18 +940,15 @@ export default function App() {
           : "";
 
       const mapsLink = `<div style="margin-top:10px;">
-          <a href="${mapsUrlFromAddress(
-            b.address
-          )}" target="_blank" rel="noopener noreferrer">Open in Maps</a>
+          <a href="${mapsUrlFromAddress(b.address)}" target="_blank" rel="noopener noreferrer">Open in Maps</a>
         </div>`;
 
-      const popupHtml = `<b>${esc(b.businessName || "Business")}</b><br>${esc(
-        b.address
-      )}${flashHtml}${regularHtml}${mapsLink}`;
+      const popupHtml = `<b>${esc(b.businessName || "Business")}</b><br>${esc(b.address)}${flashHtml}${regularHtml}${mapsLink}`;
 
       const marker = L.marker([b.lat, b.lng], { icon: wingIcon })
         .addTo(mapRef.current!)
         .bindPopup(popupHtml);
+
       markersRef.current.push(marker);
     });
   }, [todayRows, wingIcon, activeFlashInRadiusSorted]);
@@ -1002,10 +970,7 @@ export default function App() {
             mapRef.current.setView([newLocation.lat, newLocation.lng], 12);
 
             if (userMarkerRef.current) userMarkerRef.current.remove();
-            userMarkerRef.current = L.marker(
-              [newLocation.lat, newLocation.lng],
-              { icon: userIcon }
-            )
+            userMarkerRef.current = L.marker([newLocation.lat, newLocation.lng], { icon: userIcon })
               .addTo(mapRef.current)
               .bindPopup("You are here")
               .openPopup();
@@ -1032,9 +997,7 @@ export default function App() {
     const description = flashDescription.trim();
 
     if (!typedName || !street || !city || !state || !zip || !description) {
-      alert(
-        "Please fill in ALL fields: business name, street, city, state, zip, and special."
-      );
+      alert("Please fill in ALL fields: business name, street, city, state, zip, and special.");
       return;
     }
 
@@ -1045,9 +1008,7 @@ export default function App() {
 
     if (!coords) {
       setFlashPosting(false);
-      alert(
-        "Could not find that address. Please double-check the street, city, state, and ZIP."
-      );
+      alert("Could not find that address. Please double-check the street, city, state, and ZIP.");
       return;
     }
 
@@ -1056,11 +1017,9 @@ export default function App() {
 
     const addrKey = normalizeAddress(fullAddress);
     const fromExistingFlash =
-      flashSpecials.find((f) => normalizeAddress(f.fullAddress) === addrKey)
-        ?.businessName ?? null;
+      flashSpecials.find((f) => normalizeAddress(f.fullAddress) === addrKey)?.businessName ?? null;
     const fromWeekly =
-      weeklySpecials.find((w) => normalizeAddress(w.fullAddress) === addrKey)
-        ?.businessName ?? null;
+      weeklySpecials.find((w) => normalizeAddress(w.fullAddress) === addrKey)?.businessName ?? null;
 
     const canonicalName = fromWeekly ?? fromExistingFlash ?? typedName;
 
@@ -1081,9 +1040,7 @@ export default function App() {
     if (error) {
       console.log("SUPABASE INSERT ERROR:", error);
       setFlashPosting(false);
-      alert(
-        "Flash special could not save to the database.\n\nOpen Console and copy the error to me."
-      );
+      alert("Flash special could not save to the database.\n\nOpen Console and copy the error to me.");
       return;
     }
 
@@ -1103,8 +1060,8 @@ export default function App() {
   };
 
   /** =========================
-   *  WEEKLY SUBMIT -> SUPABASE (AM/PM UI, stores HH:MM 24h)
-   *  - allows overnight (end after midnight)
+   *  WEEKLY SUBMIT -> SUPABASE
+   *  (still pending, because you want approvals)
    *  ========================= */
   const addWeeklySpecial = async () => {
     if (weeklyPosting) return;
@@ -1129,11 +1086,6 @@ export default function App() {
       alert("Start and End time cannot be the same.");
       return;
     }
-
-    // validation that allows overnight
-    const startM = toMinutes(start);
-    let endM = toMinutes(end);
-    if (endM <= startM) endM += 24 * 60; // overnight ok
 
     const fullAddress = `${street}, ${city}, ${state} ${zip}`;
 
@@ -1196,38 +1148,25 @@ export default function App() {
 
   const [hovered, setHovered] = useState<string | null>(null);
 
-  const buttonStyle = (
-    key: string,
-    variant: "primary" | "secondary" = "primary"
-  ): React.CSSProperties => {
+  const buttonStyle = (key: string, variant: "primary" | "secondary" = "primary"): React.CSSProperties => {
     const base =
       variant === "primary"
-        ? {
-            background: "rgba(0, 140, 255, 0.18)",
-            border: "1px solid rgba(0, 140, 255, 0.38)",
-          }
-        : {
-            background: "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.14)",
-          };
+        ? { background: "rgba(0, 140, 255, 0.18)", border: "1px solid rgba(0, 140, 255, 0.38)" }
+        : { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)" };
 
     const isHover = hovered === key;
     return {
       ...styles.buttonBase,
       ...base,
       transform: isHover ? "translateY(-1px)" : "translateY(0)",
-      boxShadow: isHover
-        ? "0 10px 24px rgba(0,0,0,0.35)"
-        : "0 6px 18px rgba(0,0,0,0.25)",
+      boxShadow: isHover ? "0 10px 24px rgba(0,0,0,0.35)" : "0 6px 18px rgba(0,0,0,0.25)",
       filter: isHover ? "brightness(1.08)" : "brightness(1)",
       opacity: 1,
     };
   };
 
   const resultsCount = useMemo(() => {
-    const regularCount = todayRows.filter((r) =>
-      showLaterToday ? true : r.status === "active"
-    ).length;
+    const regularCount = todayRows.filter((r) => (showLaterToday ? true : r.status === "active")).length;
     const flashCount = activeFlashInRadiusSorted.length;
     return { regularCount, flashCount, total: regularCount + flashCount };
   }, [todayRows, showLaterToday, activeFlashInRadiusSorted]);
@@ -1257,9 +1196,7 @@ export default function App() {
         </div>
 
         <div style={styles.subtitle}>
-          <span style={{ opacity: 0.9 }}>
-            {"Live Local Specials - Posted By Real People Today"}
-          </span>
+          <span style={{ opacity: 0.9 }}>{"Live Local Specials - Posted By Real People Today"}</span>
           <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
           <b style={{ fontWeight: 700 }}>{today}</b>
           <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
@@ -1277,11 +1214,7 @@ export default function App() {
             ) : dbStatus === "error" ? (
               <span style={{ color: "#ff6b6b" }}>
                 <b>Blocked</b>
-                {dbErrorText ? (
-                  <span style={{ marginLeft: 8, opacity: 0.9 }}>
-                    ({dbErrorText})
-                  </span>
-                ) : null}
+                {dbErrorText ? <span style={{ marginLeft: 8, opacity: 0.9 }}>({dbErrorText})</span> : null}
               </span>
             ) : (
               <b>—</b>
@@ -1362,11 +1295,7 @@ export default function App() {
 
         <div style={styles.controlsFooterRow}>
           <label style={styles.togglePill}>
-            <input
-              type="checkbox"
-              checked={showLaterToday}
-              onChange={(e) => setShowLaterToday(e.target.checked)}
-            />
+            <input type="checkbox" checked={showLaterToday} onChange={(e) => setShowLaterToday(e.target.checked)} />
             <span style={{ marginLeft: 8 }}>Include upcoming specials</span>
           </label>
 
@@ -1389,44 +1318,12 @@ export default function App() {
             <div style={styles.formGrid}>
               {formField(
                 "Business name",
-                <input
-                  value={flashBusinessName}
-                  onChange={(e) => setFlashBusinessName(e.target.value)}
-                  style={styles.input}
-                />
+                <input value={flashBusinessName} onChange={(e) => setFlashBusinessName(e.target.value)} style={styles.input} />
               )}
-              {formField(
-                "Street",
-                <input
-                  value={flashStreet}
-                  onChange={(e) => setFlashStreet(e.target.value)}
-                  style={styles.input}
-                />
-              )}
-              {formField(
-                "City",
-                <input
-                  value={flashCity}
-                  onChange={(e) => setFlashCity(e.target.value)}
-                  style={styles.input}
-                />
-              )}
-              {formField(
-                "State",
-                <input
-                  value={flashState}
-                  onChange={(e) => setFlashState(e.target.value)}
-                  style={styles.input}
-                />
-              )}
-              {formField(
-                "ZIP",
-                <input
-                  value={flashZip}
-                  onChange={(e) => setFlashZip(e.target.value)}
-                  style={styles.input}
-                />
-              )}
+              {formField("Street", <input value={flashStreet} onChange={(e) => setFlashStreet(e.target.value)} style={styles.input} />)}
+              {formField("City", <input value={flashCity} onChange={(e) => setFlashCity(e.target.value)} style={styles.input} />)}
+              {formField("State", <input value={flashState} onChange={(e) => setFlashState(e.target.value)} style={styles.input} />)}
+              {formField("ZIP", <input value={flashZip} onChange={(e) => setFlashZip(e.target.value)} style={styles.input} />)}
               {formField(
                 "Duration (minutes)",
                 <input
@@ -1434,9 +1331,7 @@ export default function App() {
                   min={15}
                   max={720}
                   value={flashDurationMins}
-                  onChange={(e) =>
-                    setFlashDurationMins(parseInt(e.target.value || "120", 10))
-                  }
+                  onChange={(e) => setFlashDurationMins(parseInt(e.target.value || "120", 10))}
                   style={styles.input}
                 />
               )}
@@ -1457,10 +1352,7 @@ export default function App() {
               <button
                 onClick={addFlashSpecial}
                 disabled={flashPosting}
-                style={{
-                  ...buttonStyle("flashsubmit", "primary"),
-                  opacity: flashPosting ? 0.6 : 1,
-                }}
+                style={{ ...buttonStyle("flashsubmit", "primary"), opacity: flashPosting ? 0.6 : 1 }}
                 onMouseEnter={() => setHovered("flashsubmit")}
                 onMouseLeave={() => setHovered(null)}
               >
@@ -1483,7 +1375,7 @@ export default function App() {
           </div>
         )}
 
-        {/* WEEKLY FORM (AM/PM) */}
+        {/* WEEKLY FORM */}
         {showWeeklyForm && (
           <div style={styles.formCard}>
             <div style={styles.formTitle}>Post a Weekly Special (recurring)</div>
@@ -1491,52 +1383,16 @@ export default function App() {
             <div style={styles.formGrid}>
               {formField(
                 "Business name",
-                <input
-                  value={weeklyBusinessName}
-                  onChange={(e) => setWeeklyBusinessName(e.target.value)}
-                  style={styles.input}
-                />
+                <input value={weeklyBusinessName} onChange={(e) => setWeeklyBusinessName(e.target.value)} style={styles.input} />
               )}
-              {formField(
-                "Street",
-                <input
-                  value={weeklyStreet}
-                  onChange={(e) => setWeeklyStreet(e.target.value)}
-                  style={styles.input}
-                />
-              )}
-              {formField(
-                "City",
-                <input
-                  value={weeklyCity}
-                  onChange={(e) => setWeeklyCity(e.target.value)}
-                  style={styles.input}
-                />
-              )}
-              {formField(
-                "State",
-                <input
-                  value={weeklyState}
-                  onChange={(e) => setWeeklyState(e.target.value)}
-                  style={styles.input}
-                />
-              )}
-              {formField(
-                "ZIP",
-                <input
-                  value={weeklyZip}
-                  onChange={(e) => setWeeklyZip(e.target.value)}
-                  style={styles.input}
-                />
-              )}
+              {formField("Street", <input value={weeklyStreet} onChange={(e) => setWeeklyStreet(e.target.value)} style={styles.input} />)}
+              {formField("City", <input value={weeklyCity} onChange={(e) => setWeeklyCity(e.target.value)} style={styles.input} />)}
+              {formField("State", <input value={weeklyState} onChange={(e) => setWeeklyState(e.target.value)} style={styles.input} />)}
+              {formField("ZIP", <input value={weeklyZip} onChange={(e) => setWeeklyZip(e.target.value)} style={styles.input} />)}
 
               {formField(
                 "Day",
-                <select
-                  value={weeklyDay}
-                  onChange={(e) => setWeeklyDay(e.target.value as Weekday)}
-                  style={styles.select}
-                >
+                <select value={weeklyDay} onChange={(e) => setWeeklyDay(e.target.value as Weekday)} style={styles.select}>
                   {WEEKDAYS.map((d) => (
                     <option key={d} value={d}>
                       {d}
@@ -1549,11 +1405,8 @@ export default function App() {
               <TimePicker12 label="End" value={weeklyEnd12} onChange={setWeeklyEnd12} />
 
               <div style={{ gridColumn: "1 / -1", fontSize: 12, opacity: 0.9 }}>
-                You chose: <b>{prettyTime12(weeklyStart12)}</b> –{" "}
-                <b>{prettyTime12(weeklyEnd12)}</b>
-                <span style={{ marginLeft: 8, opacity: 0.8 }}>
-                  (Overnight is allowed)
-                </span>
+                You chose: <b>{prettyTime12(weeklyStart12)}</b> – <b>{prettyTime12(weeklyEnd12)}</b>
+                <span style={{ marginLeft: 8, opacity: 0.8 }}>(Overnight is allowed)</span>
               </div>
 
               <div style={{ gridColumn: "1 / -1" }}>
@@ -1573,10 +1426,7 @@ export default function App() {
               <button
                 onClick={addWeeklySpecial}
                 disabled={weeklyPosting}
-                style={{
-                  ...buttonStyle("weeklysubmit", "primary"),
-                  opacity: weeklyPosting ? 0.6 : 1,
-                }}
+                style={{ ...buttonStyle("weeklysubmit", "primary"), opacity: weeklyPosting ? 0.6 : 1 }}
                 onMouseEnter={() => setHovered("weeklysubmit")}
                 onMouseLeave={() => setHovered(null)}
               >
@@ -1606,13 +1456,9 @@ export default function App() {
         <div style={styles.sectionHeaderRow}>
           <div style={styles.sectionTitle}>Top 5 Near You</div>
           <div style={styles.sectionMeta}>
-            <span style={{ opacity: 0.9 }}>
-              {radius === 999 ? "Anywhere" : `${radius} mi`}
-            </span>
+            <span style={{ opacity: 0.9 }}>{radius === 999 ? "Anywhere" : `${radius} mi`}</span>
             <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
-            <span style={{ opacity: 0.8 }}>
-              {showLaterToday ? "Including later today" : "Active now only"}
-            </span>
+            <span style={{ opacity: 0.8 }}>{showLaterToday ? "Including later today" : "Active now only"}</span>
             {searchTerm.trim() ? (
               <>
                 <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
@@ -1628,9 +1474,7 @@ export default function App() {
           <div style={styles.card}>
             <div style={styles.cardTitle}>No nearby specials right now</div>
             <div style={styles.cardText}>
-              {searchTerm.trim()
-                ? "Try a different search word, or clear search."
-                : "Try increasing your distance or check back later."}
+              {searchTerm.trim() ? "Try a different search word, or clear search." : "Try increasing your distance or check back later."}
             </div>
           </div>
         ) : (
@@ -1638,9 +1482,7 @@ export default function App() {
         )}
       </div>
 
-      <div style={styles.footer}>
-        Closest deals show first (within your chosen distance).
-      </div>
+      <div style={styles.footer}>Closest deals show first (within your chosen distance).</div>
     </div>
   );
 }
@@ -1662,9 +1504,7 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {hasFlash && <div style={styles.badgeFlash}>FLASH</div>}
-          <div style={hasActive ? styles.badgeActive : styles.badgeLater}>
-            {hasActive ? "ACTIVE" : "LATER"}
-          </div>
+          <div style={hasActive ? styles.badgeActive : styles.badgeLater}>{hasActive ? "ACTIVE" : "LATER"}</div>
         </div>
       </div>
 
@@ -1676,9 +1516,7 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
             </div>
           ))}
           {group.flashItems.length > 2 && (
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
-              + {group.flashItems.length - 2} more flash
-            </div>
+            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>+ {group.flashItems.length - 2} more flash</div>
           )}
         </div>
       )}
@@ -1688,26 +1526,17 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
           {group.regularItems.slice(0, 2).map((r, idx) => (
             <div key={`r-${idx}`} style={styles.cardText}>
               {r.status === "active" ? "🔥" : "🕒"} {r.description}
-              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
-                {prettyWindow(r.start, r.end)}
-              </div>
+              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{prettyWindow(r.start, r.end)}</div>
             </div>
           ))}
           {group.regularItems.length > 2 && (
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
-              + {group.regularItems.length - 2} more specials
-            </div>
+            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>+ {group.regularItems.length - 2} more specials</div>
           )}
         </div>
       )}
 
       <div style={{ marginTop: 12 }}>
-        <a
-          href={mapsUrlFromAddress(group.address)}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={styles.mapLink}
-        >
+        <a href={mapsUrlFromAddress(group.address)} target="_blank" rel="noopener noreferrer" style={styles.mapLink}>
           Open in Maps
         </a>
       </div>
@@ -1730,19 +1559,16 @@ const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     padding: 16,
-    background:
-      "radial-gradient(1200px 700px at 20% -10%, rgba(0, 140, 255, 0.10), transparent 60%), #141414",
+    background: "radial-gradient(1200px 700px at 20% -10%, rgba(0, 140, 255, 0.10), transparent 60%), #141414",
     color: "#f2f2f2",
-    fontFamily:
-      '"Inter", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
+    fontFamily: '"Inter", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
     letterSpacing: 0.1,
     lineHeight: 1.35,
   },
   header: {
     padding: 14,
     borderRadius: 18,
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
     border: "1px solid rgba(255,255,255,0.10)",
     boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
     marginBottom: 12,
@@ -1751,8 +1577,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 36,
     fontWeight: 900,
     letterSpacing: 0.6,
-    fontFamily:
-      '"Permanent Marker", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
+    fontFamily: '"Permanent Marker", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
   },
   subtitle: { marginTop: 6, opacity: 0.92, fontSize: 14 },
 
@@ -1772,13 +1597,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
   },
   groupLeft: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
-  groupRight: {
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-  },
+  groupRight: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" },
 
   controlsFooterRow: {
     display: "flex",
@@ -1899,8 +1718,7 @@ const styles: Record<string, React.CSSProperties> = {
   card: {
     padding: 14,
     borderRadius: 18,
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
     border: "1px solid rgba(255,255,255,0.10)",
     marginBottom: 10,
     boxShadow: "0 10px 26px rgba(0,0,0,0.30)",
