@@ -48,8 +48,8 @@ type WeeklySpecial = {
   lat: number;
   lng: number;
   day: Weekday;
-  start: string; // stored "HH:MM" 24h
-  end: string; // stored "HH:MM" 24h
+  start: string; // "HH:MM" 24h
+  end: string; // "HH:MM" 24h (end can be 00:00 for midnight, overnight allowed)
   description: string;
   createdAt: number;
 };
@@ -105,7 +105,11 @@ function yesterdayFromDate(d: Date): Weekday {
 }
 
 function toMinutes(hhmm: string): number {
-  const [hh, mm] = hhmm.split(":").map((n) => parseInt(n, 10));
+  const parts = String(hhmm || "").split(":");
+  if (parts.length !== 2) return 0;
+  const hh = parseInt(parts[0], 10);
+  const mm = parseInt(parts[1], 10);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return 0;
   return hh * 60 + mm;
 }
 
@@ -119,7 +123,7 @@ function format12Hour(d: Date): string {
 }
 
 function formatHHMMTo12(hhmm: string): string {
-  const parts = hhmm.split(":");
+  const parts = String(hhmm || "").split(":");
   if (parts.length !== 2) return hhmm;
   const hh = parseInt(parts[0], 10);
   const mm = parseInt(parts[1], 10);
@@ -131,24 +135,18 @@ function formatHHMMTo12(hhmm: string): string {
 }
 
 function prettyWindow(start: string, end: string): string {
-  const s = start.trim();
-  const e = end.trim();
+  const s = String(start || "").trim();
+  const e = String(end || "").trim();
 
   const allDay =
-    (s === "00:00" && e === "23:59") ||
-    (s === "00:00" && e === "24:00") ||
+    (s === "00:00" && (e === "23:59" || e === "24:00" || e === "00:00")) ||
     (s === "00:00" && e === "00:00");
 
   if (allDay) return "All day";
   return `${formatHHMMTo12(s)} – ${formatHHMMTo12(e)}`;
 }
 
-function getDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 3959; // miles
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
@@ -198,7 +196,7 @@ function isFlashActiveNow(f: FlashSpecial): boolean {
 }
 
 function normalizeAddress(input: string): string {
-  return input
+  return String(input || "")
     .toLowerCase()
     .replace(/[’']/g, "")
     .replace(/[.,]/g, " ")
@@ -318,7 +316,7 @@ type DbSpecialRow = {
   address: string | null;
   expires_at: string | null;
   status: string | null;
-  extra: any | null; // ✅ can be string OR object (json/jsonb)
+  extra: any | null; // can be string OR object (json/jsonb)
   lat: number | null;
   lng: number | null;
 };
@@ -336,7 +334,6 @@ function tryParseWeeklyMeta(
 ): { day: Weekday; start: string; end: string } | null {
   if (!extra) return null;
 
-  // ✅ If Supabase returns json/jsonb, extra is already an object
   if (typeof extra === "object") {
     const day = normalizeWeekday(extra.day);
     const start = String(extra.start ?? "").trim();
@@ -345,7 +342,6 @@ function tryParseWeeklyMeta(
     return { day, start, end };
   }
 
-  // ✅ If extra is text, parse it
   if (typeof extra === "string") {
     try {
       const obj = JSON.parse(extra);
@@ -505,7 +501,7 @@ export default function App() {
   const userMarkerRef = useRef<L.Marker | null>(null);
 
   const [showLaterToday, setShowLaterToday] = useState(true);
-  const [radius, setRadius] = useState(5);
+  const [radius, setRadius] = useState(10); // ✅ default wider so "today" shows more often
   const [userLocation, setUserLocation] = useState({ lat: 40.88, lng: -74.07 });
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -516,6 +512,24 @@ export default function App() {
 
   useEffect(() => {
     ensureFontsLoaded();
+  }, []);
+
+  // ✅ try to set user location on load (silent; no alerts)
+  useEffect(() => {
+    if (!("geolocation" in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const newLocation = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        setUserLocation(newLocation);
+      },
+      () => {
+        // ignore – user denied or timed out
+      },
+      { enableHighAccuracy: false, timeout: 4000, maximumAge: 10 * 60 * 1000 }
+    );
   }, []);
 
   // FLASH
@@ -541,7 +555,6 @@ export default function App() {
   const [weeklyDescription, setWeeklyDescription] = useState("");
   const [weeklyDay, setWeeklyDay] = useState<Weekday>("Monday");
 
-  // AM/PM pickers (stored as 12h UI, converted to 24h on submit)
   const [weeklyStart12, setWeeklyStart12] = useState<Time12>({
     hour: 11,
     minute: "00",
@@ -576,7 +589,7 @@ export default function App() {
           "id, created_at, type, business_name, deal, address, expires_at, status, extra, lat, lng"
         )
         .order("created_at", { ascending: false })
-        .limit(400);
+        .limit(600);
 
       if (cancelled) return;
 
@@ -602,14 +615,13 @@ export default function App() {
   }, [reloadTick]);
 
   /** =========================
-   *  TICK for countdown + expiry
-   *  AND AUTO REFRESH DB
+   *  TICK for countdown + expiry + auto refresh
    *  ========================= */
   const [timeTick, setTimeTick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => {
       setTimeTick((x) => x + 1);
-      setReloadTick((x) => x + 1); // ✅ auto refresh Supabase
+      setReloadTick((x) => x + 1);
     }, 30000);
     return () => clearInterval(t);
   }, []);
@@ -659,16 +671,15 @@ export default function App() {
       const endRaw = toMinutes(w.end);
       const crossesMidnight = endRaw <= startM;
 
-      // Case A: Special belongs to "today" (normal)
+      // Case A: scheduled for today
       if (w.day === today) {
         let endM = endRaw;
         if (crossesMidnight) endM += 24 * 60;
 
-        const nowM =
-          crossesMidnight && nowMins < startM ? nowMins + 24 * 60 : nowMins;
+        const nowM = nowMins; // ✅ do NOT jump to next-day space before start
 
-        const isActive = nowM >= startM && nowM <= endM;
         const isLater = nowM < startM;
+        const isActive = nowM >= startM && nowM <= endM;
 
         if (isActive) {
           rows.push({
@@ -699,12 +710,12 @@ export default function App() {
         continue;
       }
 
-      // Case B: It's after midnight and we're still in the "tail" of yesterday's overnight special
+      // Case B: after midnight tail of yesterday's overnight special
       if (crossesMidnight && w.day === yesterday) {
         const endM = endRaw + 24 * 60;
-        const nowM = nowMins + 24 * 60; // compare in the "next-day" space
-
+        const nowM = nowMins + 24 * 60; // compare in "next-day space"
         const isActive = nowM >= startM && nowM <= endM;
+
         if (isActive) {
           rows.push({
             businessName: w.businessName,
@@ -734,15 +745,7 @@ export default function App() {
     });
 
     return filtered;
-  }, [
-    today,
-    yesterday,
-    nowMins,
-    userLocation,
-    radius,
-    weeklySpecials,
-    searchTerm,
-  ]);
+  }, [today, yesterday, nowMins, userLocation, radius, weeklySpecials, searchTerm]);
 
   const activeFlashInRadiusSorted = useMemo(() => {
     return flashSpecials
@@ -874,6 +877,12 @@ export default function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // keep map centered when userLocation changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+    mapRef.current.setView([userLocation.lat, userLocation.lng], 12);
+  }, [userLocation.lat, userLocation.lng]);
 
   /** =========================
    *  MAP MARKERS UPDATE
@@ -1041,10 +1050,9 @@ export default function App() {
             mapRef.current.setView([newLocation.lat, newLocation.lng], 12);
 
             if (userMarkerRef.current) userMarkerRef.current.remove();
-            userMarkerRef.current = L.marker(
-              [newLocation.lat, newLocation.lng],
-              { icon: userIcon }
-            )
+            userMarkerRef.current = L.marker([newLocation.lat, newLocation.lng], {
+              icon: userIcon,
+            })
               .addTo(mapRef.current)
               .bindPopup("You are here")
               .openPopup();
@@ -1157,7 +1165,15 @@ export default function App() {
     const description = weeklyDescription.trim();
     const day = weeklyDay;
 
-    if (!typedName || !street || !city || !state || !zip || !description || !day) {
+    if (
+      !typedName ||
+      !street ||
+      !city ||
+      !state ||
+      !zip ||
+      !description ||
+      !day
+    ) {
       alert("Please fill in ALL fields (name, address, day, time window, special).");
       return;
     }
@@ -1170,10 +1186,10 @@ export default function App() {
       return;
     }
 
-    // validation that allows overnight
+    // allow overnight
     const startM = toMinutes(start);
     let endM = toMinutes(end);
-    if (endM <= startM) endM += 24 * 60; // overnight ok
+    if (endM <= startM) endM += 24 * 60;
 
     const fullAddress = `${street}, ${city}, ${state} ${zip}`;
 
@@ -1182,19 +1198,22 @@ export default function App() {
 
     if (!coords) {
       setWeeklyPosting(false);
-      alert("Could not find that address. Please double-check the street, city, state, and ZIP.");
+      alert(
+        "Could not find that address. Please double-check the street, city, state, and ZIP."
+      );
       return;
     }
 
     const addrKey = normalizeAddress(fullAddress);
     const fromExistingFlash =
-      flashSpecials.find((f) => normalizeAddress(f.fullAddress) === addrKey)?.businessName ?? null;
+      flashSpecials.find((f) => normalizeAddress(f.fullAddress) === addrKey)
+        ?.businessName ?? null;
     const fromExistingWeekly =
-      weeklySpecials.find((w) => normalizeAddress(w.fullAddress) === addrKey)?.businessName ?? null;
+      weeklySpecials.find((w) => normalizeAddress(w.fullAddress) === addrKey)
+        ?.businessName ?? null;
 
     const canonicalName = fromExistingWeekly ?? fromExistingFlash ?? typedName;
 
-    // ✅ send object; if column is json/jsonb it stores correctly; if text it still works as JSON string in PostgREST in many cases
     const extraObj = { day, start, end };
 
     const { error } = await supabase.from("specials").insert([
@@ -1214,7 +1233,9 @@ export default function App() {
     if (error) {
       console.log("SUPABASE WEEKLY INSERT ERROR:", error);
       setWeeklyPosting(false);
-      alert("Weekly special could not save to the database.\n\nOpen Console and copy the error to me.");
+      alert(
+        "Weekly special could not save to the database.\n\nOpen Console and copy the error to me."
+      );
       return;
     }
 
@@ -1433,6 +1454,14 @@ export default function App() {
             ) : null}
           </div>
         </div>
+
+        {/* If empty, give the user the real reason */}
+        {dbStatus === "ok" && groupedTopFeed.length === 0 && (
+          <div style={{ marginTop: 10, fontSize: 12, opacity: 0.85 }}>
+            No results within <b>{radius === 999 ? "Anywhere" : `${radius} miles`}</b>. Try{" "}
+            <b>Use My Location</b> or set distance to <b>Anywhere</b>.
+          </div>
+        )}
 
         {/* FLASH FORM */}
         {showFlashForm && (
@@ -1683,7 +1712,7 @@ export default function App() {
             <div style={styles.cardText}>
               {searchTerm.trim()
                 ? "Try a different search word, or clear search."
-                : "Try increasing your distance or check back later."}
+                : "Try increasing your distance or tap “Use My Location”."}
             </div>
           </div>
         ) : (
@@ -1691,9 +1720,7 @@ export default function App() {
         )}
       </div>
 
-      <div style={styles.footer}>
-        Closest deals show first (within your chosen distance).
-      </div>
+      <div style={styles.footer}>Closest deals show first (within your chosen distance).</div>
     </div>
   );
 }
@@ -1772,9 +1799,7 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
           {flashSoonest ? (
             <span>expires in {flashSoonest.expiresInMinutes} min</span>
           ) : group.regularItems.length > 0 ? (
-            <span>
-              {prettyWindow(group.regularItems[0].start, group.regularItems[0].end)}
-            </span>
+            <span>{prettyWindow(group.regularItems[0].start, group.regularItems[0].end)}</span>
           ) : null}
         </div>
       </div>
