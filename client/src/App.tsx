@@ -1431,12 +1431,15 @@ export default function App() {
             src="/favicon.png"
             alt="Chalkboards"
             style={{
-              height: 54,
-              width: "auto",
+              width: 72,
+              height: 72,
+              borderRadius: 16,
+              objectFit: "cover",
               display: "block",
-              filter: "drop-shadow(0 6px 14px rgba(0,0,0,0.30))",
+              filter: "drop-shadow(0 8px 18px rgba(0,0,0,0.35))",
             }}
           />
+
           <div className="cb-title" style={styles.title}>
             Chalkboards
           </div>
