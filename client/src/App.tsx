@@ -261,13 +261,24 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
   sushi: ["sushi", "maki", "sashimi", "roll", "nigiri", "poke"],
   pizza: ["pizza", "slice", "pie", "pizzeria"],
   beer: ["beer", "draft", "pint", "ipa", "lager", "brew", "brewery"],
-  drinks: ["drink", "cocktail", "margarita", "martini", "tequila", "vodka", "whiskey"],
+  drinks: [
+    "drink",
+    "cocktail",
+    "margarita",
+    "martini",
+    "tequila",
+    "vodka",
+    "whiskey",
+  ],
   burgers: ["burger", "cheeseburger", "patty"],
   bbq: ["bbq", "barbecue", "brisket", "ribs", "smoke", "smoked"],
   happyhour: ["happy hour", "hh", "2-for-1", "two for one", "bogo"],
 };
 
-function matchesCategory(category: CategoryKey, ...fields: Array<string | undefined | null>) {
+function matchesCategory(
+  category: CategoryKey,
+  ...fields: Array<string | undefined | null>
+) {
   if (category === "all") return true;
   const kws = CATEGORY_KEYWORDS[category] || [];
   const blob = fields
@@ -455,7 +466,7 @@ function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
   const list: WeeklySpecial[] = [];
   for (const r of rows) {
     if (r.type !== "weekly") continue;
-    if (r.status !== "approved") continue;
+    if (r.status !== "approved") continue; // weekly shows only after approval
     if (!r.address || !r.business_name || !r.deal) continue;
     if (r.lat == null || r.lng == null) continue;
 
@@ -551,7 +562,10 @@ export default function App() {
   const userMarkerRef = useRef<L.Marker | null>(null);
 
   const [showLaterToday, setShowLaterToday] = useState(true);
-  const [radius, setRadius] = useState(10);
+
+  // ✅ default distance for urban
+  const [radius, setRadius] = useState(5);
+
   const [userLocation, setUserLocation] = useState({ lat: 40.88, lng: -74.07 });
   const [searchTerm, setSearchTerm] = useState("");
   const [category, setCategory] = useState<CategoryKey>("all");
@@ -783,8 +797,12 @@ export default function App() {
 
     // SEARCH + CATEGORY FILTER
     const filtered = rows
-      .filter((r) => includesSearch(searchTerm, r.businessName, r.address, r.description))
-      .filter((r) => matchesCategory(category, r.description, r.businessName, r.address));
+      .filter((r) =>
+        includesSearch(searchTerm, r.businessName, r.address, r.description)
+      )
+      .filter((r) =>
+        matchesCategory(category, r.description, r.businessName, r.address)
+      );
 
     filtered.sort((a, b) => {
       if (a.status !== b.status) return a.status === "active" ? -1 : 1;
@@ -795,7 +813,16 @@ export default function App() {
     });
 
     return filtered;
-  }, [today, yesterday, nowMins, userLocation, radius, weeklySpecials, searchTerm, category]);
+  }, [
+    today,
+    yesterday,
+    nowMins,
+    userLocation,
+    radius,
+    weeklySpecials,
+    searchTerm,
+    category,
+  ]);
 
   const activeFlashInRadiusSorted = useMemo(() => {
     return flashSpecials
@@ -808,7 +835,9 @@ export default function App() {
       .filter(({ f }) =>
         includesSearch(searchTerm, f.businessName, f.fullAddress, f.description)
       )
-      .filter(({ f }) => matchesCategory(category, f.description, f.businessName, f.fullAddress))
+      .filter(({ f }) =>
+        matchesCategory(category, f.description, f.businessName, f.fullAddress)
+      )
       .sort((a, b) => a.distance - b.distance);
   }, [flashSpecials, timeTick, userLocation, radius, searchTerm, category]);
 
@@ -936,7 +965,7 @@ export default function App() {
   }, [userLocation.lat, userLocation.lng]);
 
   /** =========================
-   *  MAP MARKERS UPDATE (now filtered by category/search too)
+   *  MAP MARKERS UPDATE (filtered by category/search)
    *  ========================= */
   useEffect(() => {
     if (!mapRef.current) return;
@@ -988,7 +1017,8 @@ export default function App() {
         existing.lng = patch.lng;
       }
 
-      if (patch.flashLines?.length) existing.flashLines.push(...patch.flashLines);
+      if (patch.flashLines?.length)
+        existing.flashLines.push(...patch.flashLines);
       if (patch.regularLines?.length)
         existing.regularLines.push(...patch.regularLines);
 
@@ -1215,15 +1245,7 @@ export default function App() {
     const description = weeklyDescription.trim();
     const day = weeklyDay;
 
-    if (
-      !typedName ||
-      !street ||
-      !city ||
-      !state ||
-      !zip ||
-      !description ||
-      !day
-    ) {
+    if (!typedName || !street || !city || !state || !zip || !description || !day) {
       alert("Please fill in ALL fields (name, address, day, time window, special).");
       return;
     }
@@ -1235,10 +1257,6 @@ export default function App() {
       alert("Start and End time cannot be the same.");
       return;
     }
-
-    const startM = toMinutes(start);
-    let endM = toMinutes(end);
-    if (endM <= startM) endM += 24 * 60;
 
     const fullAddress = `${street}, ${city}, ${state} ${zip}`;
 
@@ -1262,7 +1280,6 @@ export default function App() {
         ?.businessName ?? null;
 
     const canonicalName = fromExistingWeekly ?? fromExistingFlash ?? typedName;
-
     const extraObj = { day, start, end };
 
     const { error } = await supabase.from("specials").insert([
@@ -1339,6 +1356,7 @@ export default function App() {
   const chipStyle = (key: CategoryKey): React.CSSProperties => {
     const active = category === key;
     return {
+      flex: "0 0 auto",
       padding: "8px 10px",
       borderRadius: 999,
       cursor: "pointer",
@@ -1369,6 +1387,11 @@ export default function App() {
 
   return (
     <div style={styles.page}>
+      {/* ✅ Hide horizontal scrollbar for chip row on iOS/WebKit */}
+      <style>{`
+        .cb-chipRow::-webkit-scrollbar { display: none; }
+      `}</style>
+
       <div style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <img
@@ -1385,9 +1408,7 @@ export default function App() {
         </div>
 
         <div style={styles.subtitle}>
-          <span style={{ opacity: 0.9 }}>
-            {"Live Local Specials - Posted By Real People Today"}
-          </span>
+          <span style={{ opacity: 0.9 }}>{"Live Local Specials"}</span>
           <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
           <b style={{ fontWeight: 800 }}>{today}</b>
           <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
@@ -1430,6 +1451,33 @@ export default function App() {
       </div>
 
       <div style={styles.controlsShell}>
+        {/* ✅ ONE-LINE SCROLLABLE CATEGORY BAR */}
+        <div
+          className="cb-chipRow"
+          style={styles.categoryRow}
+          onWheel={(e) => {
+            // lets trackpads/mice scroll sideways
+            const el = e.currentTarget as HTMLDivElement;
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+              el.scrollLeft += e.deltaY;
+            } else {
+              el.scrollLeft += e.deltaX;
+            }
+          }}
+        >
+          {CATEGORIES.map((c) => (
+            <button
+              key={c.key}
+              onClick={() => setCategory(c.key)}
+              style={chipStyle(c.key)}
+              title={c.label}
+            >
+              <span style={{ opacity: 0.95 }}>{c.emoji}</span>
+              <span>{c.label}</span>
+            </button>
+          ))}
+        </div>
+
         <div style={styles.controlsRow}>
           <div style={styles.groupLeft}>
             <div style={styles.field}>
@@ -1497,21 +1545,6 @@ export default function App() {
               {showWeeklyForm ? "Close Weekly" : "Post Weekly"}
             </button>
           </div>
-        </div>
-
-        {/* CATEGORY FILTER BAR (replaces the ugly Results line) */}
-        <div style={styles.categoryRow}>
-          {CATEGORIES.map((c) => (
-            <button
-              key={c.key}
-              onClick={() => setCategory(c.key)}
-              style={chipStyle(c.key)}
-              title={c.label}
-            >
-              <span style={{ opacity: 0.95 }}>{c.emoji}</span>
-              <span>{c.label}</span>
-            </button>
-          ))}
         </div>
 
         <div style={styles.controlsFooterRow}>
@@ -1601,7 +1634,9 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <div
+              style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}
+            >
               <button
                 onClick={addFlashSpecial}
                 disabled={flashPosting}
@@ -1626,7 +1661,8 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Flash Specials expire automatically. We use the address to drop a pin on the map.
+              Flash Specials expire automatically. We use the address to drop a pin on
+              the map.
             </div>
           </div>
         )}
@@ -1693,7 +1729,11 @@ export default function App() {
                 </select>
               )}
 
-              <TimePicker12 label="Start" value={weeklyStart12} onChange={setWeeklyStart12} />
+              <TimePicker12
+                label="Start"
+                value={weeklyStart12}
+                onChange={setWeeklyStart12}
+              />
               <TimePicker12 label="End" value={weeklyEnd12} onChange={setWeeklyEnd12} />
 
               <div style={{ gridColumn: "1 / -1", fontSize: 12, opacity: 0.9 }}>
@@ -1717,7 +1757,9 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <div
+              style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}
+            >
               <button
                 onClick={addWeeklySpecial}
                 disabled={weeklyPosting}
@@ -1742,7 +1784,8 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Weekly Specials show on the chosen weekday (and overnight tails show after midnight).
+              Weekly Specials show on the chosen weekday (and overnight tails show after
+              midnight).
             </div>
           </div>
         )}
@@ -1781,7 +1824,7 @@ export default function App() {
             <div style={styles.cardText}>
               {searchTerm.trim()
                 ? "Try a different search word, or clear search."
-                : "Try increasing your distance or tap “Use My Location”."}
+                : "Try increasing your distance or tap “Use My Location”.")}
             </div>
           </div>
         ) : (
@@ -1789,7 +1832,9 @@ export default function App() {
         )}
       </div>
 
-      <div style={styles.footer}>Closest deals show first (within your chosen distance).</div>
+      <div style={styles.footer}>
+        Closest deals show first (within your chosen distance).
+      </div>
     </div>
   );
 }
@@ -1868,7 +1913,9 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
           {flashSoonest ? (
             <span>expires in {flashSoonest.expiresInMinutes} min</span>
           ) : group.regularItems.length > 0 ? (
-            <span>{prettyWindow(group.regularItems[0].start, group.regularItems[0].end)}</span>
+            <span>
+              {prettyWindow(group.regularItems[0].start, group.regularItems[0].end)}
+            </span>
           ) : null}
         </div>
       </div>
@@ -1921,7 +1968,12 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     flexWrap: "wrap",
   },
-  groupLeft: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
+  groupLeft: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
   groupRight: {
     display: "flex",
     gap: 10,
@@ -1930,13 +1982,18 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "flex-end",
   },
 
+  // ✅ one-line horizontal scroll chips
   categoryRow: {
     display: "flex",
     gap: 8,
-    flexWrap: "wrap",
-    marginTop: 12,
-    paddingTop: 12,
-    borderTop: "1px solid rgba(255,255,255,0.08)",
+    overflowX: "auto",
+    overflowY: "hidden",
+    flexWrap: "nowrap",
+    padding: "6px 2px 10px",
+    WebkitOverflowScrolling: "touch",
+    scrollbarWidth: "none",
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    marginBottom: 10,
   },
 
   controlsFooterRow: {
@@ -2011,7 +2068,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
   },
 
-  // Buttons smaller + less “control panel”
   buttonBase: {
     padding: "9px 12px",
     borderRadius: 13,
@@ -2058,7 +2114,12 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 8,
   },
-  sectionTitle: { fontSize: 16, fontWeight: 850 as any, opacity: 0.98, letterSpacing: 0.2 },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 850 as any,
+    opacity: 0.98,
+    letterSpacing: 0.2,
+  },
   sectionMeta: { fontSize: 12, opacity: 0.85 },
 
   card: {
@@ -2070,7 +2131,12 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 10,
     boxShadow: "0 10px 26px rgba(0,0,0,0.30)",
   },
-  cardTop: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+  cardTop: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
   cardTitle: { fontSize: 16, fontWeight: 850 as any },
   cardSubtle: { fontSize: 12, opacity: 0.75 },
   cardText: { marginTop: 6, fontSize: 14.5, lineHeight: 1.45, opacity: 0.98 },
@@ -2134,6 +2200,15 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.10)",
     boxShadow: "0 10px 26px rgba(0,0,0,0.25)",
   },
-  formTitle: { fontSize: 14, fontWeight: 900, letterSpacing: 0.3, marginBottom: 10 },
-  formGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 },
+  formTitle: {
+    fontSize: 14,
+    fontWeight: 900,
+    letterSpacing: 0.3,
+    marginBottom: 10,
+  },
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
 };
