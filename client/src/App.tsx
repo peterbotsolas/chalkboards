@@ -1983,7 +1983,7 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.35,
   },
   header: {
-  padding: "env(safe-area-inset-top) 14px 14px 14px",
+    padding: "calc(env(safe-area-inset-top) + 8px) 14px 14px 14px",
     borderRadius: 18,
     background:
       "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
