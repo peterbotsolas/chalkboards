@@ -1395,11 +1395,39 @@ export default function App() {
     <div style={styles.page}>
       <style>{`
         .cb-chipRow::-webkit-scrollbar { display: none; }
+
+        /* MAP: more screen on mobile */
+        .cb-map { height: clamp(260px, 44vh, 420px); }
+
+        /* MOBILE TIGHT MODE */
+        @media (max-width: 520px) {
+          .cb-title { font-size: 26px !important; }
+          .cb-logo { height: 42px !important; }
+          .cb-subtitle { font-size: 12px !important; line-height: 1.25 !important; }
+
+          .cb-controlsRow { flex-direction: column !important; align-items: stretch !important; }
+          .cb-groupLeft, .cb-groupRight {
+            width: 100% !important;
+            justify-content: space-between !important;
+          }
+
+          .cb-searchField { width: 100% !important; min-width: 0 !important; flex: 1 1 auto !important; }
+          .cb-searchInput { width: 100% !important; flex: 1 1 auto !important; min-width: 0 !important; }
+
+          .cb-controlsFooterRow { flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; }
+
+          .cb-map {
+            height: calc(100vh - 430px);
+            min-height: 320px;
+            max-height: 520px;
+          }
+        }
       `}</style>
 
       <div style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <img
+            className="cb-logo"
             src="/favicon.png"
             alt="Chalkboards"
             style={{
@@ -1409,10 +1437,12 @@ export default function App() {
               filter: "drop-shadow(0 6px 14px rgba(0,0,0,0.30))",
             }}
           />
-          <div style={styles.title}>Chalkboards</div>
+          <div className="cb-title" style={styles.title}>
+            Chalkboards
+          </div>
         </div>
 
-        <div style={styles.subtitle}>
+        <div className="cb-subtitle" style={styles.subtitle}>
           <span style={{ opacity: 0.9 }}>{"Live Local Specials"}</span>
           <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
           <b style={{ fontWeight: 800 }}>{today}</b>
@@ -1461,7 +1491,8 @@ export default function App() {
           style={styles.categoryRow}
           onWheel={(e: React.WheelEvent<HTMLDivElement>) => {
             const el = e.currentTarget;
-            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) el.scrollLeft += e.deltaY;
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX))
+              el.scrollLeft += e.deltaY;
             else el.scrollLeft += e.deltaX;
           }}
         >
@@ -1478,8 +1509,8 @@ export default function App() {
           ))}
         </div>
 
-        <div style={styles.controlsRow}>
-          <div style={styles.groupLeft}>
+        <div className="cb-controlsRow" style={styles.controlsRow}>
+          <div className="cb-groupLeft" style={styles.groupLeft}>
             <div style={styles.field}>
               <div style={styles.label}>Distance</div>
               <select
@@ -1496,9 +1527,10 @@ export default function App() {
               </select>
             </div>
 
-            <div style={styles.searchField}>
+            <div className="cb-searchField" style={styles.searchField}>
               <div style={styles.label}>Search</div>
               <input
+                className="cb-searchInput"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="name, address, or special…"
@@ -1526,7 +1558,7 @@ export default function App() {
             </button>
           </div>
 
-          <div style={styles.groupRight}>
+          <div className="cb-groupRight" style={styles.groupRight}>
             <button
               onClick={() => setShowFlashForm((v) => !v)}
               style={buttonStyle("flash", "primary")}
@@ -1547,7 +1579,7 @@ export default function App() {
           </div>
         </div>
 
-        <div style={styles.controlsFooterRow}>
+        <div className="cb-controlsFooterRow" style={styles.controlsFooterRow}>
           <label style={styles.togglePill}>
             <input
               type="checkbox"
@@ -1556,10 +1588,6 @@ export default function App() {
             />
             <span style={{ marginLeft: 8 }}>Include upcoming specials</span>
           </label>
-
-          <div style={styles.hintText}>
-            Tip: start with <b>10 mi</b> or <b>Anywhere</b> when the app is quiet.
-          </div>
         </div>
 
         {showFlashForm && (
@@ -1633,7 +1661,14 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                marginTop: 12,
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 onClick={addFlashSpecial}
                 disabled={flashPosting}
@@ -1658,8 +1693,8 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Flash Specials expire automatically. We use the address to drop a pin on
-              the map.
+              Flash Specials expire automatically. We use the address to drop a pin
+              on the map.
             </div>
           </div>
         )}
@@ -1725,13 +1760,23 @@ export default function App() {
                 </select>
               )}
 
-              <TimePicker12 label="Start" value={weeklyStart12} onChange={setWeeklyStart12} />
-              <TimePicker12 label="End" value={weeklyEnd12} onChange={setWeeklyEnd12} />
+              <TimePicker12
+                label="Start"
+                value={weeklyStart12}
+                onChange={setWeeklyStart12}
+              />
+              <TimePicker12
+                label="End"
+                value={weeklyEnd12}
+                onChange={setWeeklyEnd12}
+              />
 
               <div style={{ gridColumn: "1 / -1", fontSize: 12, opacity: 0.9 }}>
                 You chose: <b>{prettyTime12(weeklyStart12)}</b> –{" "}
                 <b>{prettyTime12(weeklyEnd12)}</b>
-                <span style={{ marginLeft: 8, opacity: 0.8 }}>(Overnight is allowed)</span>
+                <span style={{ marginLeft: 8, opacity: 0.8 }}>
+                  (Overnight is allowed)
+                </span>
               </div>
 
               <div style={{ gridColumn: "1 / -1" }}>
@@ -1747,7 +1792,14 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                marginTop: 12,
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 onClick={addWeeklySpecial}
                 disabled={weeklyPosting}
@@ -1772,14 +1824,14 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Weekly Specials show on the chosen weekday (and overnight tails show after
-              midnight).
+              Weekly Specials show on the chosen weekday (and overnight tails show
+              after midnight).
             </div>
           </div>
         )}
       </div>
 
-      <div ref={mapContainerRef} style={styles.map} />
+      <div ref={mapContainerRef} className="cb-map" style={styles.map} />
 
       <div style={styles.section}>
         <div style={styles.sectionHeaderRow}>
@@ -1811,11 +1863,13 @@ export default function App() {
             <div style={styles.cardText}>
               {searchTerm.trim()
                 ? "Try a different search word, or clear search."
-                : "Try increasing your distance or tap “Use My Location”."}
+                : "Try increasing your distance or tap “Use My Location”.}
             </div>
           </div>
         ) : (
-          groupedTopFeedForRender.map((g) => <GroupedCard key={g.key} group={g} />)
+          groupedTopFeedForRender.map((g) => (
+            <GroupedCard key={g.key} group={g} />
+          ))
         )}
       </div>
 
@@ -1901,7 +1955,10 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
             <span>expires in {flashSoonest.expiresInMinutes} min</span>
           ) : group.regularItems.length > 0 ? (
             <span>
-              {prettyWindow(group.regularItems[0].start, group.regularItems[0].end)}
+              {prettyWindow(
+                group.regularItems[0].start,
+                group.regularItems[0].end
+              )}
             </span>
           ) : null}
         </div>
@@ -1955,7 +2012,12 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     flexWrap: "wrap",
   },
-  groupLeft: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
+  groupLeft: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
   groupRight: {
     display: "flex",
     gap: 10,
@@ -1995,6 +2057,8 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(255,255,255,0.045)",
     border: "1px solid rgba(255,255,255,0.10)",
   },
+
+  /* ✅ UPDATED: mobile-safe sizing */
   searchField: {
     display: "flex",
     alignItems: "center",
@@ -2003,8 +2067,10 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 16,
     background: "rgba(255,255,255,0.045)",
     border: "1px solid rgba(255,255,255,0.10)",
-    minWidth: 300,
+    minWidth: 0,
+    flex: "1 1 320px",
   },
+
   label: {
     fontSize: 11,
     fontWeight: 700,
@@ -2036,6 +2102,8 @@ const styles: Record<string, React.CSSProperties> = {
     boxSizing: "border-box",
     fontSize: 14,
   },
+
+  /* ✅ UPDATED: mobile-safe sizing */
   searchInput: {
     background: "rgba(20,20,20,0.35)",
     color: "#f2f2f2",
@@ -2045,7 +2113,8 @@ const styles: Record<string, React.CSSProperties> = {
     outline: "none",
     fontWeight: 650,
     letterSpacing: 0.1,
-    width: 210,
+    width: "100%",
+    minWidth: 0,
     fontSize: 13,
   },
 
@@ -2095,7 +2164,12 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 8,
   },
-  sectionTitle: { fontSize: 16, fontWeight: 850 as any, opacity: 0.98, letterSpacing: 0.2 },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 850 as any,
+    opacity: 0.98,
+    letterSpacing: 0.2,
+  },
   sectionMeta: { fontSize: 12, opacity: 0.85 },
 
   card: {
@@ -2107,7 +2181,12 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 10,
     boxShadow: "0 10px 26px rgba(0,0,0,0.30)",
   },
-  cardTop: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+  cardTop: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
   cardTitle: { fontSize: 16, fontWeight: 850 as any },
   cardSubtle: { fontSize: 12, opacity: 0.75 },
   cardText: { marginTop: 6, fontSize: 14.5, lineHeight: 1.45, opacity: 0.98 },
@@ -2171,6 +2250,15 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.10)",
     boxShadow: "0 10px 26px rgba(0,0,0,0.25)",
   },
-  formTitle: { fontSize: 14, fontWeight: 900, letterSpacing: 0.3, marginBottom: 10 },
-  formGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 },
+  formTitle: {
+    fontSize: 14,
+    fontWeight: 900,
+    letterSpacing: 0.3,
+    marginBottom: 10,
+  },
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
 };
