@@ -1439,7 +1439,6 @@ export default function App() {
               filter: "drop-shadow(0 8px 18px rgba(0,0,0,0.35))",
             }}
           />
-
           <div className="cb-title" style={styles.title}>
             Chalkboards
           </div>
@@ -1993,12 +1992,21 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 12,
   },
   title: {
-    fontSize: 34,
+    fontSize: 42,              // ✅ BIGGER
     fontWeight: 900,
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,        // more logo feel
+    lineHeight: 1,             // tighter
     fontFamily:
       '"Permanent Marker", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
+
+    // ✅ makes it stand out
+    textShadow: `
+      0 2px 0 rgba(0,0,0,0.45),
+      0 6px 14px rgba(0,0,0,0.45),
+      0 16px 28px rgba(0,0,0,0.35)
+    `,
   },
+
   subtitle: { marginTop: 6, opacity: 0.92, fontSize: 14 },
 
   controlsShell: {
