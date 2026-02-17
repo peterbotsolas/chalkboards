@@ -1863,10 +1863,11 @@ export default function App() {
             <div style={styles.cardText}>
               {searchTerm.trim()
                 ? "Try a different search word, or clear search."
-                : "Try increasing your distance or tap “Use My Location”.}
+                : 'Try increasing your distance or tap "Use My Location".'}
             </div>
           </div>
         ) : (
+
           groupedTopFeedForRender.map((g) => (
             <GroupedCard key={g.key} group={g} />
           ))
