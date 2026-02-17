@@ -49,7 +49,7 @@ type WeeklySpecial = {
   lng: number;
   day: Weekday;
   start: string; // "HH:MM" 24h
-  end: string; // "HH:MM" 24h (end can be 00:00 for midnight, overnight allowed)
+  end: string; // "HH:MM" 24h (overnight allowed)
   description: string;
   createdAt: number;
 };
@@ -281,9 +281,7 @@ function matchesCategory(
 ) {
   if (category === "all") return true;
   const kws = CATEGORY_KEYWORDS[category] || [];
-  const blob = fields
-    .map((x) => (x ?? "").toLowerCase())
-    .join(" • ");
+  const blob = fields.map((x) => (x ?? "").toLowerCase()).join(" • ");
   return kws.some((k) => blob.includes(k));
 }
 
@@ -466,7 +464,7 @@ function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
   const list: WeeklySpecial[] = [];
   for (const r of rows) {
     if (r.type !== "weekly") continue;
-    if (r.status !== "approved") continue; // weekly shows only after approval
+    if (r.status !== "approved") continue;
     if (!r.address || !r.business_name || !r.deal) continue;
     if (r.lat == null || r.lng == null) continue;
 
@@ -562,8 +560,6 @@ export default function App() {
   const userMarkerRef = useRef<L.Marker | null>(null);
 
   const [showLaterToday, setShowLaterToday] = useState(true);
-
-  // ✅ default distance for urban
   const [radius, setRadius] = useState(5);
 
   const [userLocation, setUserLocation] = useState({ lat: 40.88, lng: -74.07 });
@@ -584,11 +580,10 @@ export default function App() {
     if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const newLocation = {
+        setUserLocation({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
-        };
-        setUserLocation(newLocation);
+        });
       },
       () => {},
       { enableHighAccuracy: false, timeout: 4000, maximumAge: 10 * 60 * 1000 }
@@ -740,7 +735,6 @@ export default function App() {
         if (crossesMidnight) endM += 24 * 60;
 
         const nowM = nowMins;
-
         const isLater = nowM < startM;
         const isActive = nowM >= startM && nowM <= endM;
 
@@ -965,7 +959,7 @@ export default function App() {
   }, [userLocation.lat, userLocation.lng]);
 
   /** =========================
-   *  MAP MARKERS UPDATE (filtered by category/search)
+   *  MAP MARKERS UPDATE
    *  ========================= */
   useEffect(() => {
     if (!mapRef.current) return;
@@ -1245,8 +1239,18 @@ export default function App() {
     const description = weeklyDescription.trim();
     const day = weeklyDay;
 
-    if (!typedName || !street || !city || !state || !zip || !description || !day) {
-      alert("Please fill in ALL fields (name, address, day, time window, special).");
+    if (
+      !typedName ||
+      !street ||
+      !city ||
+      !state ||
+      !zip ||
+      !description ||
+      !day
+    ) {
+      alert(
+        "Please fill in ALL fields (name, address, day, time window, special)."
+      );
       return;
     }
 
@@ -1385,9 +1389,10 @@ export default function App() {
     </div>
   );
 
+  const groupedTopFeedForRender = groupedTopFeed;
+
   return (
     <div style={styles.page}>
-      {/* ✅ Hide horizontal scrollbar for chip row on iOS/WebKit */}
       <style>{`
         .cb-chipRow::-webkit-scrollbar { display: none; }
       `}</style>
@@ -1451,18 +1456,13 @@ export default function App() {
       </div>
 
       <div style={styles.controlsShell}>
-        {/* ✅ ONE-LINE SCROLLABLE CATEGORY BAR */}
         <div
           className="cb-chipRow"
           style={styles.categoryRow}
-          onWheel={(e) => {
-            // lets trackpads/mice scroll sideways
-            const el = e.currentTarget as HTMLDivElement;
-            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-              el.scrollLeft += e.deltaY;
-            } else {
-              el.scrollLeft += e.deltaX;
-            }
+          onWheel={(e: React.WheelEvent<HTMLDivElement>) => {
+            const el = e.currentTarget;
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) el.scrollLeft += e.deltaY;
+            else el.scrollLeft += e.deltaX;
           }}
         >
           {CATEGORIES.map((c) => (
@@ -1562,7 +1562,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* FLASH FORM */}
         {showFlashForm && (
           <div style={styles.formCard}>
             <div style={styles.formTitle}>Post a Flash Special (same-day)</div>
@@ -1634,9 +1633,7 @@ export default function App() {
               </div>
             </div>
 
-            <div
-              style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}
-            >
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
               <button
                 onClick={addFlashSpecial}
                 disabled={flashPosting}
@@ -1667,7 +1664,6 @@ export default function App() {
           </div>
         )}
 
-        {/* WEEKLY FORM (AM/PM) */}
         {showWeeklyForm && (
           <div style={styles.formCard}>
             <div style={styles.formTitle}>Post a Weekly Special (recurring)</div>
@@ -1729,19 +1725,13 @@ export default function App() {
                 </select>
               )}
 
-              <TimePicker12
-                label="Start"
-                value={weeklyStart12}
-                onChange={setWeeklyStart12}
-              />
+              <TimePicker12 label="Start" value={weeklyStart12} onChange={setWeeklyStart12} />
               <TimePicker12 label="End" value={weeklyEnd12} onChange={setWeeklyEnd12} />
 
               <div style={{ gridColumn: "1 / -1", fontSize: 12, opacity: 0.9 }}>
                 You chose: <b>{prettyTime12(weeklyStart12)}</b> –{" "}
                 <b>{prettyTime12(weeklyEnd12)}</b>
-                <span style={{ marginLeft: 8, opacity: 0.8 }}>
-                  (Overnight is allowed)
-                </span>
+                <span style={{ marginLeft: 8, opacity: 0.8 }}>(Overnight is allowed)</span>
               </div>
 
               <div style={{ gridColumn: "1 / -1" }}>
@@ -1757,9 +1747,7 @@ export default function App() {
               </div>
             </div>
 
-            <div
-              style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}
-            >
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
               <button
                 onClick={addWeeklySpecial}
                 disabled={weeklyPosting}
@@ -1791,7 +1779,6 @@ export default function App() {
         )}
       </div>
 
-      {/* MAP STAYS ABOVE RESULTS ✅ */}
       <div ref={mapContainerRef} style={styles.map} />
 
       <div style={styles.section}>
@@ -1818,17 +1805,17 @@ export default function App() {
           </div>
         </div>
 
-        {groupedTopFeed.length === 0 ? (
+        {groupedTopFeedForRender.length === 0 ? (
           <div style={styles.card}>
             <div style={styles.cardTitle}>No nearby specials right now</div>
             <div style={styles.cardText}>
               {searchTerm.trim()
                 ? "Try a different search word, or clear search."
-                : "Try increasing your distance or tap “Use My Location”.")}
+                : "Try increasing your distance or tap “Use My Location”."}
             </div>
           </div>
         ) : (
-          groupedTopFeed.map((g) => <GroupedCard key={g.key} group={g} />)
+          groupedTopFeedForRender.map((g) => <GroupedCard key={g.key} group={g} />)
         )}
       </div>
 
@@ -1968,12 +1955,7 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     flexWrap: "wrap",
   },
-  groupLeft: {
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
+  groupLeft: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
   groupRight: {
     display: "flex",
     gap: 10,
@@ -1982,7 +1964,6 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "flex-end",
   },
 
-  // ✅ one-line horizontal scroll chips
   categoryRow: {
     display: "flex",
     gap: 8,
@@ -2114,12 +2095,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 8,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 850 as any,
-    opacity: 0.98,
-    letterSpacing: 0.2,
-  },
+  sectionTitle: { fontSize: 16, fontWeight: 850 as any, opacity: 0.98, letterSpacing: 0.2 },
   sectionMeta: { fontSize: 12, opacity: 0.85 },
 
   card: {
@@ -2131,12 +2107,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 10,
     boxShadow: "0 10px 26px rgba(0,0,0,0.30)",
   },
-  cardTop: {
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-  },
+  cardTop: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
   cardTitle: { fontSize: 16, fontWeight: 850 as any },
   cardSubtle: { fontSize: 12, opacity: 0.75 },
   cardText: { marginTop: 6, fontSize: 14.5, lineHeight: 1.45, opacity: 0.98 },
@@ -2200,15 +2171,6 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.10)",
     boxShadow: "0 10px 26px rgba(0,0,0,0.25)",
   },
-  formTitle: {
-    fontSize: 14,
-    fontWeight: 900,
-    letterSpacing: 0.3,
-    marginBottom: 10,
-  },
-  formGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-  },
+  formTitle: { fontSize: 14, fontWeight: 900, letterSpacing: 0.3, marginBottom: 10 },
+  formGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 },
 };
