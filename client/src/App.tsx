@@ -1401,7 +1401,7 @@ export default function App() {
 
         /* MOBILE TIGHT MODE */
         @media (max-width: 520px) {
-          .cb-title { font-size: 26px !important; }
+          .cb-title { font-size: 32px !important; }
           .cb-logo { height: 42px !important; }
           .cb-subtitle { font-size: 12px !important; line-height: 1.25 !important; }
 
