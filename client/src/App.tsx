@@ -227,6 +227,56 @@ function includesSearch(
 }
 
 /** =========================
+ *  CATEGORY FILTERS
+ *  ========================= */
+type CategoryKey =
+  | "all"
+  | "wings"
+  | "tacos"
+  | "sushi"
+  | "pizza"
+  | "beer"
+  | "drinks"
+  | "burgers"
+  | "bbq"
+  | "happyhour";
+
+const CATEGORIES: Array<{ key: CategoryKey; label: string; emoji: string }> = [
+  { key: "all", label: "All", emoji: "🗺️" },
+  { key: "wings", label: "Wings", emoji: "🍗" },
+  { key: "tacos", label: "Tacos", emoji: "🌮" },
+  { key: "sushi", label: "Sushi", emoji: "🍣" },
+  { key: "pizza", label: "Pizza", emoji: "🍕" },
+  { key: "beer", label: "Beer", emoji: "🍺" },
+  { key: "drinks", label: "Drinks", emoji: "🍸" },
+  { key: "burgers", label: "Burgers", emoji: "🍔" },
+  { key: "bbq", label: "BBQ", emoji: "🔥" },
+  { key: "happyhour", label: "Happy Hour", emoji: "⏰" },
+];
+
+const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
+  all: [],
+  wings: ["wing", "wings", "boneless", "tenders", "drum", "flat"],
+  tacos: ["taco", "tacos", "taco tuesday", "birria", "quesadilla", "nacho"],
+  sushi: ["sushi", "maki", "sashimi", "roll", "nigiri", "poke"],
+  pizza: ["pizza", "slice", "pie", "pizzeria"],
+  beer: ["beer", "draft", "pint", "ipa", "lager", "brew", "brewery"],
+  drinks: ["drink", "cocktail", "margarita", "martini", "tequila", "vodka", "whiskey"],
+  burgers: ["burger", "cheeseburger", "patty"],
+  bbq: ["bbq", "barbecue", "brisket", "ribs", "smoke", "smoked"],
+  happyhour: ["happy hour", "hh", "2-for-1", "two for one", "bogo"],
+};
+
+function matchesCategory(category: CategoryKey, ...fields: Array<string | undefined | null>) {
+  if (category === "all") return true;
+  const kws = CATEGORY_KEYWORDS[category] || [];
+  const blob = fields
+    .map((x) => (x ?? "").toLowerCase())
+    .join(" • ");
+  return kws.some((k) => blob.includes(k));
+}
+
+/** =========================
  *  TIME (AM/PM) HELPERS
  *  ========================= */
 function pad2(n: number): string {
@@ -501,9 +551,10 @@ export default function App() {
   const userMarkerRef = useRef<L.Marker | null>(null);
 
   const [showLaterToday, setShowLaterToday] = useState(true);
-  const [radius, setRadius] = useState(10); // ✅ default wider so "today" shows more often
+  const [radius, setRadius] = useState(10);
   const [userLocation, setUserLocation] = useState({ lat: 40.88, lng: -74.07 });
   const [searchTerm, setSearchTerm] = useState("");
+  const [category, setCategory] = useState<CategoryKey>("all");
 
   const [dbStatus, setDbStatus] = useState<"idle" | "loading" | "ok" | "error">(
     "idle"
@@ -514,7 +565,7 @@ export default function App() {
     ensureFontsLoaded();
   }, []);
 
-  // ✅ try to set user location on load (silent; no alerts)
+  // Try to set user location on load (silent)
   useEffect(() => {
     if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
@@ -525,9 +576,7 @@ export default function App() {
         };
         setUserLocation(newLocation);
       },
-      () => {
-        // ignore – user denied or timed out
-      },
+      () => {},
       { enableHighAccuracy: false, timeout: 4000, maximumAge: 10 * 60 * 1000 }
     );
   }, []);
@@ -676,7 +725,7 @@ export default function App() {
         let endM = endRaw;
         if (crossesMidnight) endM += 24 * 60;
 
-        const nowM = nowMins; // ✅ do NOT jump to next-day space before start
+        const nowM = nowMins;
 
         const isLater = nowM < startM;
         const isActive = nowM >= startM && nowM <= endM;
@@ -713,7 +762,7 @@ export default function App() {
       // Case B: after midnight tail of yesterday's overnight special
       if (crossesMidnight && w.day === yesterday) {
         const endM = endRaw + 24 * 60;
-        const nowM = nowMins + 24 * 60; // compare in "next-day space"
+        const nowM = nowMins + 24 * 60;
         const isActive = nowM >= startM && nowM <= endM;
 
         if (isActive) {
@@ -732,9 +781,10 @@ export default function App() {
       }
     }
 
-    const filtered = rows.filter((r) =>
-      includesSearch(searchTerm, r.businessName, r.address, r.description)
-    );
+    // SEARCH + CATEGORY FILTER
+    const filtered = rows
+      .filter((r) => includesSearch(searchTerm, r.businessName, r.address, r.description))
+      .filter((r) => matchesCategory(category, r.description, r.businessName, r.address));
 
     filtered.sort((a, b) => {
       if (a.status !== b.status) return a.status === "active" ? -1 : 1;
@@ -745,7 +795,7 @@ export default function App() {
     });
 
     return filtered;
-  }, [today, yesterday, nowMins, userLocation, radius, weeklySpecials, searchTerm]);
+  }, [today, yesterday, nowMins, userLocation, radius, weeklySpecials, searchTerm, category]);
 
   const activeFlashInRadiusSorted = useMemo(() => {
     return flashSpecials
@@ -758,8 +808,9 @@ export default function App() {
       .filter(({ f }) =>
         includesSearch(searchTerm, f.businessName, f.fullAddress, f.description)
       )
+      .filter(({ f }) => matchesCategory(category, f.description, f.businessName, f.fullAddress))
       .sort((a, b) => a.distance - b.distance);
-  }, [flashSpecials, timeTick, userLocation, radius, searchTerm]);
+  }, [flashSpecials, timeTick, userLocation, radius, searchTerm, category]);
 
   const groupedTopFeed = useMemo((): GroupedFeed[] => {
     const map = new Map<string, GroupedFeed>();
@@ -885,7 +936,7 @@ export default function App() {
   }, [userLocation.lat, userLocation.lng]);
 
   /** =========================
-   *  MAP MARKERS UPDATE
+   *  MAP MARKERS UPDATE (now filtered by category/search too)
    *  ========================= */
   useEffect(() => {
     if (!mapRef.current) return;
@@ -1151,8 +1202,7 @@ export default function App() {
   };
 
   /** =========================
-   *  WEEKLY SUBMIT -> SUPABASE (AM/PM UI, stores HH:MM 24h)
-   *  - allows overnight (end after midnight)
+   *  WEEKLY SUBMIT -> SUPABASE
    *  ========================= */
   const addWeeklySpecial = async () => {
     if (weeklyPosting) return;
@@ -1186,7 +1236,6 @@ export default function App() {
       return;
     }
 
-    // allow overnight
     const startM = toMinutes(start);
     let endM = toMinutes(end);
     if (endM <= startM) endM += 24 * 60;
@@ -1266,12 +1315,12 @@ export default function App() {
     const base =
       variant === "primary"
         ? {
-            background: "rgba(0, 140, 255, 0.18)",
-            border: "1px solid rgba(0, 140, 255, 0.38)",
+            background: "rgba(0, 140, 255, 0.16)",
+            border: "1px solid rgba(0, 140, 255, 0.34)",
           }
         : {
-            background: "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.14)",
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.12)",
           };
 
     const isHover = hovered === key;
@@ -1280,20 +1329,36 @@ export default function App() {
       ...base,
       transform: isHover ? "translateY(-1px)" : "translateY(0)",
       boxShadow: isHover
-        ? "0 10px 24px rgba(0,0,0,0.35)"
-        : "0 6px 18px rgba(0,0,0,0.25)",
-      filter: isHover ? "brightness(1.08)" : "brightness(1)",
+        ? "0 10px 22px rgba(0,0,0,0.32)"
+        : "0 6px 14px rgba(0,0,0,0.22)",
+      filter: isHover ? "brightness(1.06)" : "brightness(1)",
       opacity: 1,
     };
   };
 
-  const resultsCount = useMemo(() => {
-    const regularCount = todayRows.filter((r) =>
-      showLaterToday ? true : r.status === "active"
-    ).length;
-    const flashCount = activeFlashInRadiusSorted.length;
-    return { regularCount, flashCount, total: regularCount + flashCount };
-  }, [todayRows, showLaterToday, activeFlashInRadiusSorted]);
+  const chipStyle = (key: CategoryKey): React.CSSProperties => {
+    const active = category === key;
+    return {
+      padding: "8px 10px",
+      borderRadius: 999,
+      cursor: "pointer",
+      userSelect: "none",
+      fontWeight: 800,
+      fontSize: 13,
+      letterSpacing: 0.1,
+      border: active
+        ? "1px solid rgba(0, 140, 255, 0.55)"
+        : "1px solid rgba(255,255,255,0.12)",
+      background: active
+        ? "rgba(0, 140, 255, 0.18)"
+        : "rgba(255,255,255,0.05)",
+      color: "#f2f2f2",
+      whiteSpace: "nowrap",
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 8,
+    };
+  };
 
   const formField = (label: string, child: React.ReactNode) => (
     <div style={{ display: "grid", gap: 6 }}>
@@ -1310,10 +1375,10 @@ export default function App() {
             src="/favicon.png"
             alt="Chalkboards"
             style={{
-              height: 60,
+              height: 54,
               width: "auto",
               display: "block",
-              filter: "drop-shadow(0 6px 14px rgba(0,0,0,0.35))",
+              filter: "drop-shadow(0 6px 14px rgba(0,0,0,0.30))",
             }}
           />
           <div style={styles.title}>Chalkboards</div>
@@ -1324,7 +1389,7 @@ export default function App() {
             {"Live Local Specials - Posted By Real People Today"}
           </span>
           <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
-          <b style={{ fontWeight: 700 }}>{today}</b>
+          <b style={{ fontWeight: 800 }}>{today}</b>
           <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
           <span style={{ opacity: 0.9 }}>{format12Hour(new Date())}</span>
           <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
@@ -1351,14 +1416,14 @@ export default function App() {
             )}
           </span>
 
-          <span style={{ marginLeft: 12 }}>
+          <span style={{ marginLeft: 10 }}>
             <button
               onClick={() => setReloadTick((x) => x + 1)}
               style={buttonStyle("refreshdb", "secondary")}
               onMouseEnter={() => setHovered("refreshdb")}
               onMouseLeave={() => setHovered(null)}
             >
-              Refresh from database
+              Refresh
             </button>
           </span>
         </div>
@@ -1420,7 +1485,7 @@ export default function App() {
               onMouseEnter={() => setHovered("flash")}
               onMouseLeave={() => setHovered(null)}
             >
-              {showFlashForm ? "Close Flash Special" : "Post Flash Special"}
+              {showFlashForm ? "Close Flash" : "Post Flash"}
             </button>
 
             <button
@@ -1429,9 +1494,24 @@ export default function App() {
               onMouseEnter={() => setHovered("weekly")}
               onMouseLeave={() => setHovered(null)}
             >
-              {showWeeklyForm ? "Close Weekly Special" : "Post Weekly Special"}
+              {showWeeklyForm ? "Close Weekly" : "Post Weekly"}
             </button>
           </div>
+        </div>
+
+        {/* CATEGORY FILTER BAR (replaces the ugly Results line) */}
+        <div style={styles.categoryRow}>
+          {CATEGORIES.map((c) => (
+            <button
+              key={c.key}
+              onClick={() => setCategory(c.key)}
+              style={chipStyle(c.key)}
+              title={c.label}
+            >
+              <span style={{ opacity: 0.95 }}>{c.emoji}</span>
+              <span>{c.label}</span>
+            </button>
+          ))}
         </div>
 
         <div style={styles.controlsFooterRow}>
@@ -1445,23 +1525,9 @@ export default function App() {
           </label>
 
           <div style={styles.hintText}>
-            Showing nearby deals within your chosen{" "}
-            <span style={{ fontWeight: 600, opacity: 1 }}>distance</span>.
-            {searchTerm.trim() ? (
-              <span style={{ marginLeft: 10, opacity: 0.85 }}>
-                • Search results: <b>{resultsCount.total}</b>
-              </span>
-            ) : null}
+            Tip: start with <b>10 mi</b> or <b>Anywhere</b> when the app is quiet.
           </div>
         </div>
-
-        {/* If empty, give the user the real reason */}
-        {dbStatus === "ok" && groupedTopFeed.length === 0 && (
-          <div style={{ marginTop: 10, fontSize: 12, opacity: 0.85 }}>
-            No results within <b>{radius === 999 ? "Anywhere" : `${radius} miles`}</b>. Try{" "}
-            <b>Use My Location</b> or set distance to <b>Anywhere</b>.
-          </div>
-        )}
 
         {/* FLASH FORM */}
         {showFlashForm && (
@@ -1546,7 +1612,7 @@ export default function App() {
                 onMouseEnter={() => setHovered("flashsubmit")}
                 onMouseLeave={() => setHovered(null)}
               >
-                {flashPosting ? "Posting..." : "Submit Flash Special"}
+                {flashPosting ? "Posting..." : "Submit Flash"}
               </button>
 
               <button
@@ -1662,7 +1728,7 @@ export default function App() {
                 onMouseEnter={() => setHovered("weeklysubmit")}
                 onMouseLeave={() => setHovered(null)}
               >
-                {weeklyPosting ? "Posting..." : "Submit Weekly Special"}
+                {weeklyPosting ? "Posting..." : "Submit Weekly"}
               </button>
 
               <button
@@ -1682,6 +1748,7 @@ export default function App() {
         )}
       </div>
 
+      {/* MAP STAYS ABOVE RESULTS ✅ */}
       <div ref={mapContainerRef} style={styles.map} />
 
       <div style={styles.section}>
@@ -1692,8 +1759,10 @@ export default function App() {
               {radius === 999 ? "Anywhere" : `${radius} mi`}
             </span>
             <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
-            <span style={{ opacity: 0.8 }}>
-              {showLaterToday ? "Including later today" : "Active now only"}
+            <span style={{ opacity: 0.85 }}>
+              {category === "all"
+                ? "All categories"
+                : CATEGORIES.find((c) => c.key === category)?.label}
             </span>
             {searchTerm.trim() ? (
               <>
@@ -1829,7 +1898,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 12,
   },
   title: {
-    fontSize: 36,
+    fontSize: 34,
     fontWeight: 900,
     letterSpacing: 0.6,
     fontFamily:
@@ -1861,6 +1930,15 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "flex-end",
   },
 
+  categoryRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    marginTop: 12,
+    paddingTop: 12,
+    borderTop: "1px solid rgba(255,255,255,0.08)",
+  },
+
   controlsFooterRow: {
     display: "flex",
     gap: 10,
@@ -1869,13 +1947,12 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     marginTop: 10,
     paddingTop: 10,
-    borderTop: "1px solid rgba(255,255,255,0.08)",
   },
   field: {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    padding: "10px 12px",
+    padding: "8px 10px",
     borderRadius: 16,
     background: "rgba(255,255,255,0.045)",
     border: "1px solid rgba(255,255,255,0.10)",
@@ -1884,11 +1961,11 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    padding: "10px 12px",
+    padding: "8px 10px",
     borderRadius: 16,
     background: "rgba(255,255,255,0.045)",
     border: "1px solid rgba(255,255,255,0.10)",
-    minWidth: 320,
+    minWidth: 300,
   },
   label: {
     fontSize: 11,
@@ -1903,61 +1980,68 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#f2f2f2",
     border: "1px solid rgba(255,255,255,0.18)",
     borderRadius: 12,
-    padding: "9px 10px",
+    padding: "8px 10px",
     outline: "none",
-    fontWeight: 600,
+    fontWeight: 650,
     letterSpacing: 0.1,
+    fontSize: 13,
   },
   input: {
     background: "rgba(20,20,20,0.35)",
     color: "#f2f2f2",
     border: "1px solid rgba(255,255,255,0.18)",
     borderRadius: 14,
-    padding: "11px 12px",
+    padding: "10px 12px",
     outline: "none",
     fontWeight: 500,
     width: "100%",
     boxSizing: "border-box",
+    fontSize: 14,
   },
   searchInput: {
     background: "rgba(20,20,20,0.35)",
     color: "#f2f2f2",
     border: "1px solid rgba(255,255,255,0.18)",
     borderRadius: 12,
-    padding: "9px 10px",
+    padding: "8px 10px",
     outline: "none",
-    fontWeight: 600,
+    fontWeight: 650,
     letterSpacing: 0.1,
-    width: 220,
+    width: 210,
+    fontSize: 13,
   },
+
+  // Buttons smaller + less “control panel”
   buttonBase: {
-    padding: "11px 14px",
-    borderRadius: 14,
+    padding: "9px 12px",
+    borderRadius: 13,
     color: "#f2f2f2",
     cursor: "pointer",
-    fontWeight: 700,
-    letterSpacing: 0.2,
+    fontWeight: 800,
+    letterSpacing: 0.15,
     lineHeight: 1,
     whiteSpace: "nowrap",
     transition: "transform 140ms ease, box-shadow 140ms ease, filter 140ms ease",
     userSelect: "none",
+    fontSize: 13,
   },
+
   togglePill: {
     display: "flex",
     alignItems: "center",
-    padding: "10px 12px",
+    padding: "9px 12px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.045)",
     border: "1px solid rgba(255,255,255,0.10)",
     cursor: "pointer",
     whiteSpace: "nowrap",
     fontSize: 13,
-    fontWeight: 600,
+    fontWeight: 650,
   },
   hintText: { fontSize: 12, opacity: 0.75, letterSpacing: 0.1 },
 
   map: {
-    height: 260,
+    height: 270,
     borderRadius: 18,
     marginBottom: 12,
     border: "1px solid rgba(255,255,255,0.10)",
@@ -1974,7 +2058,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 8,
   },
-  sectionTitle: { fontSize: 16, fontWeight: 800, opacity: 0.98, letterSpacing: 0.2 },
+  sectionTitle: { fontSize: 16, fontWeight: 850 as any, opacity: 0.98, letterSpacing: 0.2 },
   sectionMeta: { fontSize: 12, opacity: 0.85 },
 
   card: {
@@ -2036,8 +2120,9 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.14)",
     color: "#f2f2f2",
     textDecoration: "none",
-    fontWeight: 800,
+    fontWeight: 850 as any,
     letterSpacing: 0.2,
+    fontSize: 13,
   },
   footer: { marginTop: 16, opacity: 0.72, fontSize: 12, lineHeight: 1.4 },
 
