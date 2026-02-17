@@ -1424,8 +1424,6 @@ export default function App() {
         }
       `}</style>
 
-      <div style={styles.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <img
             className="cb-logo"
             src="/favicon.png"
@@ -1433,12 +1431,13 @@ export default function App() {
             style={{
               width: 72,
               height: 72,
+              padding: 6,
+              boxSizing: "border-box",
               borderRadius: 16,
-              objectFit: "cover",
+              objectFit: "contain",
               display: "block",
-              filter: "drop-shadow(0 8px 18px rgba(0,0,0,0.35))",
-            }}
-          />
+              f
+
           <div className="cb-title" style={styles.title}>
             Chalkboards
           </div>
