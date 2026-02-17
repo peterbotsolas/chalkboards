@@ -1973,7 +1973,10 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
-    padding: 16,
+    paddingTop: "calc(16px + env(safe-area-inset-top))",
+    paddingLeft: "calc(16px + env(safe-area-inset-left))",
+    paddingRight: "calc(16px + env(safe-area-inset-right))",
+    paddingBottom: 16,
     background:
       "radial-gradient(1200px 700px at 20% -10%, rgba(0, 140, 255, 0.10), transparent 60%), #141414",
     color: "#f2f2f2",
@@ -1983,7 +1986,7 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.35,
   },
   header: {
-    padding: "calc(env(safe-area-inset-top) + 8px) 14px 14px 14px",
+    padding: 14,
     borderRadius: 18,
     background:
       "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
