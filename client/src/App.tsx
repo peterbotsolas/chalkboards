@@ -701,7 +701,7 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
   return (
     <div style={styles.card}>
       <div style={styles.cardTop}>
-        <div style={{ display: "grid", gap: 2 }}>
+        <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
           <div style={styles.cardTitle}>{group.businessName}</div>
           <div style={styles.cardSubtle}>{distanceText ? distanceText : ""}</div>
         </div>
@@ -959,9 +959,8 @@ export default function App() {
         let endM = endRaw;
         if (crossesMidnight) endM += 24 * 60;
 
-        const nowM = nowMins;
-        const isLater = nowM < startM;
-        const isActive = nowM >= startM && nowM <= endM;
+        const isLater = nowMins < startM;
+        const isActive = nowMins >= startM && nowMins <= endM;
 
         if (isActive) {
           rows.push({
@@ -985,7 +984,7 @@ export default function App() {
             end: w.end,
             description: w.description,
             status: "later",
-            startsInMinutes: startM - nowM,
+            startsInMinutes: startM - nowMins,
             distance: dist,
           });
         }
@@ -1617,40 +1616,43 @@ export default function App() {
               height: 64,
               borderRadius: 14,
               objectFit: "contain",
+              flex: "0 0 auto",
             }}
           />
 
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div className="cb-title" style={styles.title}>
               Chalkboards
             </div>
 
             <div style={styles.subtitle}>
-              Live Local Specials • <b>{today}</b> • {format12Hour(new Date())}
+              Live Local Specials • <b>{today}</b> • {format12Hour(new Date())} •{" "}
+              {dbStatus === "ok" ? (
+                <span
+                  onClick={() => setReloadTick((x) => x + 1)}
+                  style={{
+                    color: "#00FF00",
+                    fontWeight: 900,
+                    cursor: "pointer",
+                  }}
+                  title="Tap to refresh"
+                >
+                  LIVE ↻
+                </span>
+              ) : dbStatus === "loading" ? (
+                <span style={{ opacity: 0.85 }}>Loading…</span>
+              ) : dbStatus === "error" ? (
+                <span style={{ color: "#ff6b6b", fontWeight: 800 }}>
+                  Offline
+                </span>
+              ) : null}
+              {dbStatus === "error" && dbErrorText ? (
+                <span style={{ marginLeft: 10, opacity: 0.85 }}>
+                  ({dbErrorText})
+                </span>
+              ) : null}
             </div>
           </div>
-        </div>
-
-        {/* ✅ FIXED: Database status JSX (removed duplicated broken block) */}
-        <div style={{ marginTop: 8, fontSize: 13 }}>
-          Database:{" "}
-          {dbStatus === "ok" ? (
-            <span
-              onClick={() => setReloadTick((x) => x + 1)}
-              style={{ color: "#00FF00", fontWeight: 900, cursor: "pointer" }}
-              title="Tap to refresh"
-            >
-              LIVE ↻
-            </span>
-          ) : dbStatus === "loading" ? (
-            <b>Loading…</b>
-          ) : dbStatus === "error" ? (
-            <span style={{ color: "#ff6b6b" }}>
-              <b>Blocked</b> {dbErrorText && `(${dbErrorText})`}
-            </span>
-          ) : (
-            <b>—</b>
-          )}
         </div>
       </div>
 
@@ -1831,14 +1833,7 @@ export default function App() {
               </div>
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                marginTop: 12,
-                flexWrap: "wrap",
-              }}
-            >
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
               <button
                 onClick={addFlashSpecial}
                 disabled={flashPosting}
@@ -1863,8 +1858,7 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Flash Specials expire automatically. We use the address to drop a
-              pin on the map.
+              Flash Specials expire automatically. We use the address to drop a pin on the map.
             </div>
           </div>
         )}
@@ -1962,14 +1956,7 @@ export default function App() {
               </div>
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                marginTop: 12,
-                flexWrap: "wrap",
-              }}
-            >
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
               <button
                 onClick={addWeeklySpecial}
                 disabled={weeklyPosting}
@@ -1994,8 +1981,7 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Weekly Specials show on the chosen weekday (and overnight tails
-              show after midnight).
+              Weekly Specials show on the chosen weekday (and overnight tails show after midnight).
             </div>
           </div>
         )}
@@ -2074,17 +2060,6 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
     marginBottom: 12,
   },
-  headerTopRow: {
-    display: "flex",
-    gap: 12,
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  titleWrap: {
-    minWidth: 0,
-    flex: "1 1 auto",
-    overflow: "hidden",
-  },
   title: {
     fontSize: "clamp(28px, 8vw, 42px)",
     fontWeight: 900,
@@ -2151,6 +2126,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 10,
     paddingTop: 10,
   },
+
   field: {
     display: "flex",
     alignItems: "center",
@@ -2181,6 +2157,7 @@ const styles: Record<string, React.CSSProperties> = {
     opacity: 0.85,
     whiteSpace: "nowrap",
   },
+
   select: {
     background: "rgba(20,20,20,0.35)",
     color: "#f2f2f2",
@@ -2192,6 +2169,7 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.1,
     fontSize: 13,
   },
+
   input: {
     background: "rgba(20,20,20,0.35)",
     color: "#f2f2f2",
@@ -2328,6 +2306,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(0, 140, 255, 0.14)",
     border: "1px solid rgba(0, 140, 255, 0.28)",
   },
+
   mapLink: {
     display: "inline-block",
     padding: "9px 12px",
@@ -2340,6 +2319,7 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.2,
     fontSize: 13,
   },
+
   footer: { marginTop: 16, opacity: 0.72, fontSize: 12, lineHeight: 1.4 },
 
   formCard: {
@@ -2356,9 +2336,10 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.3,
     marginBottom: 10,
   },
+  // Responsive without media queries: auto-fit columns
   formGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
     gap: 10,
   },
 };
