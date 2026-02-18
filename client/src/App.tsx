@@ -375,7 +375,7 @@ type DbSpecialRow = {
   address: string | null;
   expires_at: string | null;
   status: string | null;
-  extra: any | null; // can be string OR object (json/jsonb)
+  extra: any | null; // string OR object
   lat: number | null;
   lng: number | null;
 };
@@ -464,7 +464,7 @@ function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
   const list: WeeklySpecial[] = [];
   for (const r of rows) {
     if (r.type !== "weekly") continue;
-    if (r.status !== "approved") continue; // ONLY show approved weekly
+    if (r.status !== "approved") continue;
     if (!r.address || !r.business_name || !r.deal) continue;
     if (r.lat == null || r.lng == null) continue;
 
@@ -739,6 +739,7 @@ export default function App() {
       if (cancelled) return;
 
       if (error) {
+        // eslint-disable-next-line no-console
         console.log("SUPABASE LOAD ERROR:", error);
         setDbStatus("error");
         setDbErrorText(error.message || "Unknown Supabase error");
@@ -1276,6 +1277,7 @@ export default function App() {
     ]);
 
     if (error) {
+      // eslint-disable-next-line no-console
       console.log("SUPABASE INSERT ERROR:", error);
       setFlashPosting(false);
       alert(
@@ -1376,6 +1378,7 @@ export default function App() {
     ]);
 
     if (error) {
+      // eslint-disable-next-line no-console
       console.log("SUPABASE WEEKLY INSERT ERROR:", error);
       setWeeklyPosting(false);
       alert(
@@ -1714,9 +1717,7 @@ export default function App() {
               </div>
             </div>
 
-            <div
-              style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}
-            >
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
               <button
                 onClick={addFlashSpecial}
                 disabled={flashPosting}
@@ -1741,8 +1742,7 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Flash Specials expire automatically. We use the address to drop a pin on
-              the map.
+              Flash Specials expire automatically. We use the address to drop a pin on the map.
             </div>
           </div>
         )}
@@ -1840,9 +1840,7 @@ export default function App() {
               </div>
             </div>
 
-            <div
-              style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}
-            >
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
               <button
                 onClick={addWeeklySpecial}
                 disabled={weeklyPosting}
@@ -1867,8 +1865,7 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Weekly Specials show on the chosen weekday (and overnight tails show
-              after midnight).
+              Weekly Specials show on the chosen weekday (and overnight tails show after midnight).
             </div>
           </div>
         )}
@@ -1938,7 +1935,6 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.1,
     lineHeight: 1.35,
   },
-
   header: {
     padding: 14,
     borderRadius: 18,
@@ -1948,22 +1944,19 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
     marginBottom: 12,
   },
-
-  // NEW: fixes title overflow on iPhone
   headerTopRow: {
     display: "flex",
-    alignItems: "center",
     gap: 12,
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  // NEW: critical for iOS flex overflow
   titleWrap: {
-    flex: "1 1 auto",
     minWidth: 0,
+    flex: "1 1 auto",
+    overflow: "hidden",
   },
-
-  // UPDATED: responsive + ellipsis to prevent running off screen
   title: {
-    fontSize: "clamp(28px, 7.2vw, 42px)",
+    fontSize: 42,
     fontWeight: 900,
     letterSpacing: 0.8,
     lineHeight: 1,
@@ -1974,9 +1967,7 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
-    maxWidth: "100%",
   },
-
   subtitle: { marginTop: 6, opacity: 0.92, fontSize: 14 },
 
   controlsShell: {
