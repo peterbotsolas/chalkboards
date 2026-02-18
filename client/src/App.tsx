@@ -258,15 +258,15 @@ const CATEGORIES: Array<{ key: CategoryKey; label: string; emoji: string }> = [
   { key: "burgers", label: "Burgers", emoji: "🍔" },
   { key: "sushi", label: "Sushi", emoji: "🍣" },
   { key: "bbq", label: "BBQ", emoji: "🍖" },
-  { key: "seafood", label: "Seafood", emoji: "🦞" }, // swapped shrimp -> lobster
+  { key: "seafood", label: "Seafood", emoji: "🦞" },
   { key: "pasta", label: "Pasta", emoji: "🍝" },
-  { key: "med", label: "Mediterranean", emoji: "🥙" }, // added gyro/med category
+  { key: "med", label: "Mediterranean", emoji: "🥙" },
   { key: "sandwiches", label: "Sandwiches", emoji: "🥪" },
   { key: "breakfast", label: "Breakfast", emoji: "🍳" },
   { key: "beer", label: "Beer", emoji: "🍺" },
   { key: "cocktails", label: "Cocktails", emoji: "🍸" },
   { key: "coffee", label: "Coffee", emoji: "☕" },
-  { key: "dessert", label: "Dessert", emoji: "🍰" }, // updated dessert to cake
+  { key: "dessert", label: "Dessert", emoji: "🍰" },
   { key: "happyhour", label: "Happy Hour", emoji: "⏰" },
   { key: "latenight", label: "Late Night", emoji: "🌙" },
   { key: "barfood", label: "Bar Food", emoji: "🍻" },
@@ -276,14 +276,11 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
   all: [],
   wings: ["wing", "wings", "boneless", "tenders", "drum", "flat"],
   mexican: [
-    // general / cuisine
     "mexican",
     "taqueria",
     "cantina",
     "tex-mex",
     "tortilla",
-
-    // tacos + variants
     "taco",
     "tacos",
     "taco tuesday",
@@ -294,16 +291,12 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "barbacoa",
     "carnitas",
     "carne asada",
-
-    // burritos / quesadillas / nachos
     "burrito",
     "burritos",
     "quesadilla",
     "quesadillas",
     "nacho",
     "nachos",
-
-    // classics + sides
     "enchilada",
     "enchiladas",
     "fajita",
@@ -317,8 +310,6 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "guacamole",
     "salsa",
     "chips",
-
-    // drinks commonly tied to specials
     "margarita",
     "margaritas",
     "tequila",
@@ -1188,7 +1179,7 @@ export default function App() {
       g.flashItems.sort((a, b) => a.expiresInMinutes - b.expiresInMinutes);
       g.regularItems.sort((a, b) => {
         if (a.status !== b.status) return a.status === "active" ? -1 : 1;
-        return toMinutes(a.start) - toMinutes(b.start));
+        return toMinutes(a.start) - toMinutes(b.start); // ✅ FIXED (removed extra ')')
       });
 
       if (g.regularItems.length > 0) {
@@ -1471,7 +1462,6 @@ export default function App() {
     ]);
 
     if (error) {
-      // eslint-disable-next-line no-console
       console.log("SUPABASE INSERT ERROR:", error);
       setFlashPosting(false);
       alert(
@@ -1572,7 +1562,6 @@ export default function App() {
     ]);
 
     if (error) {
-      // eslint-disable-next-line no-console
       console.log("SUPABASE WEEKLY INSERT ERROR:", error);
       setWeeklyPosting(false);
       alert(
