@@ -233,46 +233,197 @@ type CategoryKey =
   | "all"
   | "wings"
   | "tacos"
-  | "sushi"
   | "pizza"
-  | "beer"
-  | "drinks"
   | "burgers"
+  | "sushi"
   | "bbq"
-  | "happyhour";
+  | "seafood"
+  | "pasta"
+  | "sandwiches"
+  | "breakfast"
+  | "beer"
+  | "cocktails"
+  | "coffee"
+  | "dessert"
+  | "happyhour"
+  | "latenight"
+  | "barfood";
 
 const CATEGORIES: Array<{ key: CategoryKey; label: string; emoji: string }> = [
   { key: "all", label: "All", emoji: "🗺️" },
   { key: "wings", label: "Wings", emoji: "🍗" },
   { key: "tacos", label: "Tacos", emoji: "🌮" },
-  { key: "sushi", label: "Sushi", emoji: "🍣" },
   { key: "pizza", label: "Pizza", emoji: "🍕" },
-  { key: "beer", label: "Beer", emoji: "🍺" },
-  { key: "drinks", label: "Drinks", emoji: "🍸" },
   { key: "burgers", label: "Burgers", emoji: "🍔" },
+  { key: "sushi", label: "Sushi", emoji: "🍣" },
   { key: "bbq", label: "BBQ", emoji: "🔥" },
+  { key: "seafood", label: "Seafood", emoji: "🦐" },
+  { key: "pasta", label: "Pasta", emoji: "🍝" },
+  { key: "sandwiches", label: "Sandwiches", emoji: "🥪" },
+  { key: "breakfast", label: "Breakfast", emoji: "🍳" },
+  { key: "beer", label: "Beer", emoji: "🍺" },
+  { key: "cocktails", label: "Cocktails", emoji: "🍸" },
+  { key: "coffee", label: "Coffee", emoji: "☕" },
+  { key: "dessert", label: "Dessert", emoji: "🍩" },
   { key: "happyhour", label: "Happy Hour", emoji: "⏰" },
+  { key: "latenight", label: "Late Night", emoji: "🌙" },
+  { key: "barfood", label: "Bar Food", emoji: "🍻" },
 ];
 
 const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
   all: [],
+
   wings: ["wing", "wings", "boneless", "tenders", "drum", "flat"],
-  tacos: ["taco", "tacos", "taco tuesday", "birria", "quesadilla", "nacho"],
-  sushi: ["sushi", "maki", "sashimi", "roll", "nigiri", "poke"],
-  pizza: ["pizza", "slice", "pie", "pizzeria"],
-  beer: ["beer", "draft", "pint", "ipa", "lager", "brew", "brewery"],
-  drinks: [
-    "drink",
-    "cocktail",
-    "margarita",
-    "martini",
-    "tequila",
-    "vodka",
-    "whiskey",
+  tacos: [
+    "taco",
+    "tacos",
+    "taco tuesday",
+    "birria",
+    "quesadilla",
+    "nacho",
+    "burrito",
+    "taqueria",
   ],
-  burgers: ["burger", "cheeseburger", "patty"],
-  bbq: ["bbq", "barbecue", "brisket", "ribs", "smoke", "smoked"],
-  happyhour: ["happy hour", "hh", "2-for-1", "two for one", "bogo"],
+  pizza: ["pizza", "slice", "pie", "pizzeria", "stromboli", "calzone"],
+  burgers: ["burger", "cheeseburger", "patty", "smashburger", "fries"],
+
+  sushi: [
+    "sushi",
+    "maki",
+    "sashimi",
+    "roll",
+    "nigiri",
+    "poke",
+    "ramen",
+    "hibachi",
+    "teriyaki",
+  ],
+
+  bbq: ["bbq", "barbecue", "brisket", "ribs", "smoke", "smoked", "pulled pork"],
+
+  seafood: [
+    "seafood",
+    "shrimp",
+    "oyster",
+    "oysters",
+    "lobster",
+    "clams",
+    "mussels",
+    "crab",
+    "fish",
+    "salmon",
+    "tuna",
+  ],
+
+  pasta: [
+    "pasta",
+    "spaghetti",
+    "penne",
+    "vodka",
+    "alfredo",
+    "parm",
+    "parmesan",
+    "lasagna",
+    "gnocchi",
+    "ravioli",
+    "italian",
+  ],
+
+  sandwiches: [
+    "sandwich",
+    "sub",
+    "subs",
+    "hero",
+    "hoagie",
+    "wrap",
+    "panini",
+    "deli",
+    "cheesesteak",
+    "chicken sandwich",
+  ],
+
+  breakfast: [
+    "breakfast",
+    "brunch",
+    "pancake",
+    "waffle",
+    "eggs",
+    "omelet",
+    "bacon",
+    "bagel",
+  ],
+
+  beer: [
+    "beer",
+    "draft",
+    "pint",
+    "ipa",
+    "lager",
+    "brew",
+    "brewery",
+    "bucket",
+    "pitcher",
+  ],
+
+  cocktails: [
+    "drink",
+    "drinks",
+    "cocktail",
+    "martini",
+    "margarita",
+    "mojito",
+    "old fashioned",
+    "whiskey",
+    "vodka",
+    "tequila",
+    "wine",
+    "sangria",
+  ],
+
+  coffee: [
+    "coffee",
+    "espresso",
+    "latte",
+    "cappuccino",
+    "cafe",
+    "iced coffee",
+    "cold brew",
+  ],
+
+  dessert: [
+    "dessert",
+    "ice cream",
+    "gelato",
+    "cake",
+    "brownie",
+    "cookie",
+    "donut",
+    "cannoli",
+    "cheesecake",
+  ],
+
+  happyhour: ["happy hour", "hh", "2-for-1", "two for one", "bogo", "half off"],
+
+  latenight: [
+    "late night",
+    "after 9",
+    "after 10",
+    "after 11",
+    "midnight",
+    "kitchen open late",
+  ],
+
+  barfood: [
+    "bar food",
+    "apps",
+    "appetizer",
+    "nachos",
+    "sliders",
+    "wings",
+    "fries",
+    "pub",
+    "tavern",
+  ],
 };
 
 function matchesCategory(
@@ -1515,6 +1666,8 @@ export default function App() {
           <button
             onClick={() => setReloadTick((x) => x + 1)}
             style={buttonStyle("refreshdb", "secondary")}
+            onMouseEnter={() => setHovered("refreshdb")}
+            onMouseLeave={() => setHovered(null)}
           >
             Refresh
           </button>
@@ -1698,7 +1851,14 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                marginTop: 12,
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 onClick={addFlashSpecial}
                 disabled={flashPosting}
@@ -1723,7 +1883,8 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Flash Specials expire automatically. We use the address to drop a pin on the map.
+              Flash Specials expire automatically. We use the address to drop a
+              pin on the map.
             </div>
           </div>
         )}
@@ -1821,7 +1982,14 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                marginTop: 12,
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 onClick={addWeeklySpecial}
                 disabled={weeklyPosting}
@@ -1846,7 +2014,8 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Weekly Specials show on the chosen weekday (and overnight tails show after midnight).
+              Weekly Specials show on the chosen weekday (and overnight tails
+              show after midnight).
             </div>
           </div>
         )}
