@@ -1758,7 +1758,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* 🔥 Happening Now / 🔜 Upcoming */}
+        {/* 🔥 Happening Now / 🕒 Upcoming */}
         <div className="cb-controlsFooterRow" style={styles.controlsFooterRow}>
           <div style={styles.segmentWrap} aria-label="Feed mode">
             <button
@@ -1775,7 +1775,7 @@ export default function App() {
               style={segmentBtn(feedMode === "upcoming")}
               title="Active + later today"
             >
-              🔜 Upcoming
+              🕒 Upcoming
             </button>
           </div>
         </div>
@@ -2040,7 +2040,7 @@ export default function App() {
             </span>
             <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
             <span style={{ opacity: 0.9 }}>
-              {feedMode === "now" ? "🔥 Happening Now" : "🔜 Upcoming"}
+              {feedMode === "now" ? "🔥 Happening Now" : "🕒 Upcoming"}
             </span>
             {searchTerm.trim() ? (
               <>
@@ -2249,7 +2249,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
   },
 
-  // 🔥/🔜 segmented control
+  // 🔥/🕒 segmented control
   segmentWrap: {
     display: "flex",
     gap: 8,
