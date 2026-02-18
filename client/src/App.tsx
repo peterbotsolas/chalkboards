@@ -272,7 +272,6 @@ const CATEGORIES: Array<{ key: CategoryKey; label: string; emoji: string }> = [
 
 const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
   all: [],
-
   wings: ["wing", "wings", "boneless", "tenders", "drum", "flat"],
   tacos: [
     "taco",
@@ -286,7 +285,6 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
   ],
   pizza: ["pizza", "slice", "pie", "pizzeria", "stromboli", "calzone"],
   burgers: ["burger", "cheeseburger", "patty", "smashburger", "fries"],
-
   sushi: [
     "sushi",
     "maki",
@@ -298,9 +296,7 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "hibachi",
     "teriyaki",
   ],
-
   bbq: ["bbq", "barbecue", "brisket", "ribs", "smoke", "smoked", "pulled pork"],
-
   seafood: [
     "seafood",
     "shrimp",
@@ -314,7 +310,6 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "salmon",
     "tuna",
   ],
-
   pasta: [
     "pasta",
     "spaghetti",
@@ -328,7 +323,6 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "ravioli",
     "italian",
   ],
-
   sandwiches: [
     "sandwich",
     "sub",
@@ -341,7 +335,6 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "cheesesteak",
     "chicken sandwich",
   ],
-
   breakfast: [
     "breakfast",
     "brunch",
@@ -352,7 +345,6 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "bacon",
     "bagel",
   ],
-
   beer: [
     "beer",
     "draft",
@@ -364,7 +356,6 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "bucket",
     "pitcher",
   ],
-
   cocktails: [
     "drink",
     "drinks",
@@ -379,7 +370,6 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "wine",
     "sangria",
   ],
-
   coffee: [
     "coffee",
     "espresso",
@@ -389,7 +379,6 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "iced coffee",
     "cold brew",
   ],
-
   dessert: [
     "dessert",
     "ice cream",
@@ -401,9 +390,7 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "cannoli",
     "cheesecake",
   ],
-
   happyhour: ["happy hour", "hh", "2-for-1", "two for one", "bogo", "half off"],
-
   latenight: [
     "late night",
     "after 9",
@@ -412,7 +399,6 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "midnight",
     "kitchen open late",
   ],
-
   barfood: [
     "bar food",
     "apps",
@@ -1645,22 +1631,17 @@ export default function App() {
           </div>
         </div>
 
+        {/* ✅ FIXED: Database status JSX (removed duplicated broken block) */}
         <div style={{ marginTop: 8, fontSize: 13 }}>
           Database:{" "}
           {dbStatus === "ok" ? (
-            <span style={{ color: "#00FF00" }}>
-              <b>LIVE</b>
-    <span
-      onClick={() => setReloadTick((x) => x + 1)}
-      style={{
-        color: "#00FF00",
-        fontWeight: 900,
-        cursor: "pointer",
-      }}
-      title="Tap to refresh"
-    >
-      LIVE ↻
-    </span>
+            <span
+              onClick={() => setReloadTick((x) => x + 1)}
+              style={{ color: "#00FF00", fontWeight: 900, cursor: "pointer" }}
+              title="Tap to refresh"
+            >
+              LIVE ↻
+            </span>
           ) : dbStatus === "loading" ? (
             <b>Loading…</b>
           ) : dbStatus === "error" ? (
@@ -1671,7 +1652,6 @@ export default function App() {
             <b>—</b>
           )}
         </div>
-
       </div>
 
       {/* CONTROLS SHELL */}
