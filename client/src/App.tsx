@@ -239,6 +239,7 @@ type CategoryKey =
   | "bbq"
   | "seafood"
   | "pasta"
+  | "med"
   | "sandwiches"
   | "breakfast"
   | "beer"
@@ -257,14 +258,15 @@ const CATEGORIES: Array<{ key: CategoryKey; label: string; emoji: string }> = [
   { key: "burgers", label: "Burgers", emoji: "🍔" },
   { key: "sushi", label: "Sushi", emoji: "🍣" },
   { key: "bbq", label: "BBQ", emoji: "🍖" },
-  { key: "seafood", label: "Seafood", emoji: "🦞" },
+  { key: "seafood", label: "Seafood", emoji: "🦞" }, // swapped shrimp -> lobster
   { key: "pasta", label: "Pasta", emoji: "🍝" },
+  { key: "med", label: "Mediterranean", emoji: "🥙" }, // added gyro/med category
   { key: "sandwiches", label: "Sandwiches", emoji: "🥪" },
   { key: "breakfast", label: "Breakfast", emoji: "🍳" },
   { key: "beer", label: "Beer", emoji: "🍺" },
   { key: "cocktails", label: "Cocktails", emoji: "🍸" },
   { key: "coffee", label: "Coffee", emoji: "☕" },
-  { key: "dessert", label: "Dessert", emoji: "🍰" },
+  { key: "dessert", label: "Dessert", emoji: "🍰" }, // updated dessert to cake
   { key: "happyhour", label: "Happy Hour", emoji: "⏰" },
   { key: "latenight", label: "Late Night", emoji: "🌙" },
   { key: "barfood", label: "Bar Food", emoji: "🍻" },
@@ -322,6 +324,24 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "gnocchi",
     "ravioli",
     "italian",
+  ],
+  med: [
+    "mediterranean",
+    "med",
+    "greek",
+    "gyro",
+    "gyros",
+    "shawarma",
+    "falafel",
+    "halal",
+    "kebab",
+    "kabob",
+    "pita",
+    "tzatziki",
+    "hummus",
+    "platter",
+    "lamb",
+    "chicken over rice",
   ],
   sandwiches: [
     "sandwich",
@@ -1833,7 +1853,14 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                marginTop: 12,
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 onClick={addFlashSpecial}
                 disabled={flashPosting}
@@ -1858,7 +1885,8 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Flash Specials expire automatically. We use the address to drop a pin on the map.
+              Flash Specials expire automatically. We use the address to drop a
+              pin on the map.
             </div>
           </div>
         )}
@@ -1956,7 +1984,14 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                marginTop: 12,
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 onClick={addWeeklySpecial}
                 disabled={weeklyPosting}
@@ -1981,7 +2016,8 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Weekly Specials show on the chosen weekday (and overnight tails show after midnight).
+              Weekly Specials show on the chosen weekday (and overnight tails
+              show after midnight).
             </div>
           </div>
         )}
