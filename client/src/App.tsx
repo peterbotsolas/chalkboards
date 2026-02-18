@@ -2086,7 +2086,7 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.35,
   },
   header: {
-    padding: 14,
+    padding: 12,
     borderRadius: 18,
     background:
       "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
@@ -2106,7 +2106,7 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: "hidden",
   },
   title: {
-    fontSize: 42,
+    fontSize: "clamp(28px, 8vw, 42px)",
     fontWeight: 900,
     letterSpacing: 0.8,
     lineHeight: 1,
@@ -2118,7 +2118,7 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: "hidden",
     textOverflow: "ellipsis",
   },
-  subtitle: { marginTop: 6, opacity: 0.92, fontSize: 14 },
+  subtitle: { marginTop: 4, opacity: 0.92, fontSize: 13, lineHeight: 1.2 },
 
   controlsShell: {
     padding: 12,
