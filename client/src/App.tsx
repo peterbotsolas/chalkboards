@@ -48,8 +48,8 @@ type WeeklySpecial = {
   lat: number;
   lng: number;
   day: Weekday;
-  start: string; // "HH:MM" 24h
-  end: string; // "HH:MM" 24h (overnight allowed)
+  start: string; // "HH:MM"
+  end: string; // "HH:MM"
   description: string;
   createdAt: number;
 };
@@ -464,7 +464,7 @@ function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
   const list: WeeklySpecial[] = [];
   for (const r of rows) {
     if (r.type !== "weekly") continue;
-    if (r.status !== "approved") continue;
+    if (r.status !== "approved") continue; // ONLY show approved weekly
     if (!r.address || !r.business_name || !r.deal) continue;
     if (r.lat == null || r.lng == null) continue;
 
@@ -553,6 +553,93 @@ type GroupedFeed = {
   flashItems: FlashFeedItem[];
 };
 
+function GroupedCard({ group }: { group: GroupedFeed }) {
+  const hasFlash = group.flashItems.length > 0;
+  const hasActive = hasFlash || group.hasActiveRegular;
+
+  const distanceText =
+    group.distance >= 999999 ? "" : `${group.distance.toFixed(1)} mi`;
+  const flashSoonest = hasFlash ? group.flashItems[0] : null;
+
+  return (
+    <div style={styles.card}>
+      <div style={styles.cardTop}>
+        <div style={{ display: "grid", gap: 2 }}>
+          <div style={styles.cardTitle}>{group.businessName}</div>
+          <div style={styles.cardSubtle}>{distanceText ? distanceText : ""}</div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {hasFlash && <div style={styles.badgeFlash}>FLASH</div>}
+          <div style={hasActive ? styles.badgeActive : styles.badgeLater}>
+            {hasActive ? "ACTIVE" : "LATER"}
+          </div>
+        </div>
+      </div>
+
+      {group.flashItems.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          {group.flashItems.slice(0, 2).map((f, idx) => (
+            <div key={`f-${idx}`} style={styles.cardText}>
+              ⚡ {f.description}
+            </div>
+          ))}
+          {group.flashItems.length > 2 && (
+            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
+              + {group.flashItems.length - 2} more flash
+            </div>
+          )}
+        </div>
+      )}
+
+      {group.regularItems.length > 0 && (
+        <div style={{ marginTop: group.flashItems.length > 0 ? 12 : 8 }}>
+          {group.regularItems.slice(0, 2).map((r, idx) => (
+            <div key={`r-${idx}`} style={styles.cardText}>
+              {r.status === "active" ? "🔥" : "🕒"} {r.description}
+              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
+                {prettyWindow(r.start, r.end)}
+              </div>
+            </div>
+          ))}
+          {group.regularItems.length > 2 && (
+            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
+              + {group.regularItems.length - 2} more specials
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ marginTop: 12 }}>
+        <a
+          href={mapsUrlFromAddress(group.address)}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={styles.mapLink}
+        >
+          Open in Maps
+        </a>
+      </div>
+
+      <div style={styles.cardMeta}>
+        <div style={{ maxWidth: "70%" }}>{group.address}</div>
+        <div>
+          {flashSoonest ? (
+            <span>expires in {flashSoonest.expiresInMinutes} min</span>
+          ) : group.regularItems.length > 0 ? (
+            <span>
+              {prettyWindow(
+                group.regularItems[0].start,
+                group.regularItems[0].end
+              )}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -632,7 +719,7 @@ export default function App() {
   const [reloadTick, setReloadTick] = useState(0);
 
   /** =========================
-   *  LOAD FROM SUPABASE
+   *  LOAD FROM SUPABASE (and refresh)
    *  ========================= */
   useEffect(() => {
     let cancelled = false;
@@ -974,7 +1061,6 @@ export default function App() {
       lng: number;
       flashLines: string[];
       regularLines: string[];
-      distanceHint: number;
     };
 
     const buckets = new Map<string, PopupBucket>();
@@ -990,7 +1076,6 @@ export default function App() {
           lng: typeof patch.lng === "number" ? patch.lng : 0,
           flashLines: patch.flashLines ?? [],
           regularLines: patch.regularLines ?? [],
-          distanceHint: patch.distanceHint ?? 999999,
         });
         return;
       }
@@ -1002,9 +1087,7 @@ export default function App() {
         typeof patch.lat === "number" &&
         typeof patch.lng === "number" &&
         Number.isFinite(patch.lat) &&
-        Number.isFinite(patch.lng) &&
-        patch.lat !== 0 &&
-        patch.lng !== 0
+        Number.isFinite(patch.lng)
       ) {
         existing.lat = patch.lat;
         existing.lng = patch.lng;
@@ -1014,13 +1097,6 @@ export default function App() {
         existing.flashLines.push(...patch.flashLines);
       if (patch.regularLines?.length)
         existing.regularLines.push(...patch.regularLines);
-
-      if (
-        typeof patch.distanceHint === "number" &&
-        patch.distanceHint < existing.distanceHint
-      ) {
-        existing.distanceHint = patch.distanceHint;
-      }
     };
 
     const esc = (s: string) =>
@@ -1039,7 +1115,6 @@ export default function App() {
         address: row.address,
         lat: row.lat,
         lng: row.lng,
-        distanceHint: row.distance ?? 999999,
         regularLines: [
           `${row.status === "active" ? "🔥" : "🕒"} ${row.description} (${prettyWindow(
             row.start,
@@ -1050,14 +1125,13 @@ export default function App() {
     });
 
     // Flash
-    activeFlashInRadiusSorted.forEach(({ f, distance }) => {
+    activeFlashInRadiusSorted.forEach(({ f }) => {
       const key = normalizeAddress(f.fullAddress);
       upsert(key, {
         businessName: f.businessName,
         address: f.fullAddress,
         lat: f.lat,
         lng: f.lng,
-        distanceHint: distance,
         flashLines: [`⚡ ${f.description}`],
       });
     });
@@ -1103,6 +1177,7 @@ export default function App() {
       const marker = L.marker([b.lat, b.lng], { icon: wingIcon })
         .addTo(mapRef.current!)
         .bindPopup(popupHtml);
+
       markersRef.current.push(marker);
     });
   }, [todayRows, wingIcon, activeFlashInRadiusSorted]);
@@ -1111,33 +1186,33 @@ export default function App() {
    *  LOCATE ME
    *  ========================= */
   const handleLocateMe = () => {
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const newLocation = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          };
-          setUserLocation(newLocation);
-
-          if (mapRef.current) {
-            mapRef.current.setView([newLocation.lat, newLocation.lng], 12);
-
-            if (userMarkerRef.current) userMarkerRef.current.remove();
-            userMarkerRef.current = L.marker(
-              [newLocation.lat, newLocation.lng],
-              { icon: userIcon }
-            )
-              .addTo(mapRef.current)
-              .bindPopup("You are here")
-              .openPopup();
-          }
-        },
-        (error) => alert("Error getting location: " + error.message)
-      );
-    } else {
+    if (!("geolocation" in navigator)) {
       alert("Geolocation is not supported by your browser");
+      return;
     }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const newLocation = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        setUserLocation(newLocation);
+
+        if (mapRef.current) {
+          mapRef.current.setView([newLocation.lat, newLocation.lng], 12);
+
+          if (userMarkerRef.current) userMarkerRef.current.remove();
+          userMarkerRef.current = L.marker([newLocation.lat, newLocation.lng], {
+            icon: userIcon,
+          })
+            .addTo(mapRef.current)
+            .bindPopup("You are here")
+            .openPopup();
+        }
+      },
+      (error) => alert("Error getting location: " + error.message)
+    );
   };
 
   /** =========================
@@ -1239,7 +1314,15 @@ export default function App() {
     const description = weeklyDescription.trim();
     const day = weeklyDay;
 
-    if (!typedName || !street || !city || !state || !zip || !description) {
+    if (
+      !typedName ||
+      !street ||
+      !city ||
+      !state ||
+      !zip ||
+      !description ||
+      !day
+    ) {
       alert(
         "Please fill in ALL fields (name, address, day, time window, special)."
       );
@@ -1402,7 +1485,6 @@ export default function App() {
               flex: "0 0 auto",
             }}
           />
-
           <div className="cb-title" style={styles.title}>
             Chalkboards
           </div>
@@ -1451,7 +1533,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* CONTROLS SHELL (this was the broken part in your file) */}
+      {/* CONTROLS SHELL (FIXED NESTING) */}
       <div style={styles.controlsShell}>
         <div
           className="cb-chipRow"
@@ -1628,14 +1710,7 @@ export default function App() {
               </div>
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                marginTop: 12,
-                flexWrap: "wrap",
-              }}
-            >
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
               <button
                 onClick={addFlashSpecial}
                 disabled={flashPosting}
@@ -1660,8 +1735,7 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Flash Specials expire automatically. We use the address to drop a
-              pin on the map.
+              Flash Specials expire automatically. We use the address to drop a pin on the map.
             </div>
           </div>
         )}
@@ -1727,23 +1801,13 @@ export default function App() {
                 </select>
               )}
 
-              <TimePicker12
-                label="Start"
-                value={weeklyStart12}
-                onChange={setWeeklyStart12}
-              />
-              <TimePicker12
-                label="End"
-                value={weeklyEnd12}
-                onChange={setWeeklyEnd12}
-              />
+              <TimePicker12 label="Start" value={weeklyStart12} onChange={setWeeklyStart12} />
+              <TimePicker12 label="End" value={weeklyEnd12} onChange={setWeeklyEnd12} />
 
               <div style={{ gridColumn: "1 / -1", fontSize: 12, opacity: 0.9 }}>
                 You chose: <b>{prettyTime12(weeklyStart12)}</b> –{" "}
                 <b>{prettyTime12(weeklyEnd12)}</b>
-                <span style={{ marginLeft: 8, opacity: 0.8 }}>
-                  (Overnight is allowed)
-                </span>
+                <span style={{ marginLeft: 8, opacity: 0.8 }}>(Overnight is allowed)</span>
               </div>
 
               <div style={{ gridColumn: "1 / -1" }}>
@@ -1759,14 +1823,7 @@ export default function App() {
               </div>
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                marginTop: 12,
-                flexWrap: "wrap",
-              }}
-            >
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
               <button
                 onClick={addWeeklySpecial}
                 disabled={weeklyPosting}
@@ -1791,8 +1848,7 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Weekly Specials show on the chosen weekday (and overnight tails
-              show after midnight).
+              Weekly Specials show on the chosen weekday (and overnight tails show after midnight).
             </div>
           </div>
         )}
@@ -1801,7 +1857,7 @@ export default function App() {
       {/* MAP */}
       <div ref={mapContainerRef} className="cb-map" style={styles.map} />
 
-      {/* TOP FEED */}
+      {/* TOP 5 */}
       <div style={styles.section}>
         <div style={styles.sectionHeaderRow}>
           <div style={styles.sectionTitle}>Top 5 Near You</div>
@@ -1840,96 +1896,7 @@ export default function App() {
         )}
       </div>
 
-      <div style={styles.footer}>
-        Closest deals show first (within your chosen distance).
-      </div>
-    </div>
-  );
-}
-
-function GroupedCard({ group }: { group: GroupedFeed }) {
-  const hasFlash = group.flashItems.length > 0;
-  const hasActive = hasFlash || group.hasActiveRegular;
-
-  const distanceText =
-    group.distance >= 999999 ? "" : `${group.distance.toFixed(1)} mi`;
-  const flashSoonest = hasFlash ? group.flashItems[0] : null;
-
-  return (
-    <div style={styles.card}>
-      <div style={styles.cardTop}>
-        <div style={{ display: "grid", gap: 2 }}>
-          <div style={styles.cardTitle}>{group.businessName}</div>
-          <div style={styles.cardSubtle}>{distanceText ? distanceText : ""}</div>
-        </div>
-
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {hasFlash && <div style={styles.badgeFlash}>FLASH</div>}
-          <div style={hasActive ? styles.badgeActive : styles.badgeLater}>
-            {hasActive ? "ACTIVE" : "LATER"}
-          </div>
-        </div>
-      </div>
-
-      {group.flashItems.length > 0 && (
-        <div style={{ marginTop: 10 }}>
-          {group.flashItems.slice(0, 2).map((f, idx) => (
-            <div key={`f-${idx}`} style={styles.cardText}>
-              ⚡ {f.description}
-            </div>
-          ))}
-          {group.flashItems.length > 2 && (
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
-              + {group.flashItems.length - 2} more flash
-            </div>
-          )}
-        </div>
-      )}
-
-      {group.regularItems.length > 0 && (
-        <div style={{ marginTop: group.flashItems.length > 0 ? 12 : 8 }}>
-          {group.regularItems.slice(0, 2).map((r, idx) => (
-            <div key={`r-${idx}`} style={styles.cardText}>
-              {r.status === "active" ? "🔥" : "🕒"} {r.description}
-              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
-                {prettyWindow(r.start, r.end)}
-              </div>
-            </div>
-          ))}
-          {group.regularItems.length > 2 && (
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
-              + {group.regularItems.length - 2} more specials
-            </div>
-          )}
-        </div>
-      )}
-
-      <div style={{ marginTop: 12 }}>
-        <a
-          href={mapsUrlFromAddress(group.address)}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={styles.mapLink}
-        >
-          Open in Maps
-        </a>
-      </div>
-
-      <div style={styles.cardMeta}>
-        <div style={{ maxWidth: "70%" }}>{group.address}</div>
-        <div>
-          {flashSoonest ? (
-            <span>expires in {flashSoonest.expiresInMinutes} min</span>
-          ) : group.regularItems.length > 0 ? (
-            <span>
-              {prettyWindow(
-                group.regularItems[0].start,
-                group.regularItems[0].end
-              )}
-            </span>
-          ) : null}
-        </div>
-      </div>
+      <div style={styles.footer}>Closest deals show first (within your chosen distance).</div>
     </div>
   );
 }
@@ -1965,11 +1932,8 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1,
     fontFamily:
       '"Permanent Marker", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
-    textShadow: `
-      0 2px 0 rgba(0,0,0,0.45),
-      0 6px 14px rgba(0,0,0,0.45),
-      0 16px 28px rgba(0,0,0,0.35)
-    `,
+    textShadow:
+      "0 2px 0 rgba(0,0,0,0.45), 0 6px 14px rgba(0,0,0,0.45), 0 16px 28px rgba(0,0,0,0.35)",
   },
   subtitle: { marginTop: 6, opacity: 0.92, fontSize: 14 },
 
@@ -2137,12 +2101,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 8,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 850 as any,
-    opacity: 0.98,
-    letterSpacing: 0.2,
-  },
+  sectionTitle: { fontSize: 16, fontWeight: 850, opacity: 0.98, letterSpacing: 0.2 },
   sectionMeta: { fontSize: 12, opacity: 0.85 },
 
   card: {
@@ -2160,7 +2119,7 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     gap: 12,
   },
-  cardTitle: { fontSize: 16, fontWeight: 850 as any },
+  cardTitle: { fontSize: 16, fontWeight: 850 },
   cardSubtle: { fontSize: 12, opacity: 0.75 },
   cardText: { marginTop: 6, fontSize: 14.5, lineHeight: 1.45, opacity: 0.98 },
   cardMeta: {
@@ -2209,7 +2168,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.14)",
     color: "#f2f2f2",
     textDecoration: "none",
-    fontWeight: 850 as any,
+    fontWeight: 850,
     letterSpacing: 0.2,
     fontSize: 13,
   },
