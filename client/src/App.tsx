@@ -1468,7 +1468,7 @@ export default function App() {
     <div style={styles.page}>
       {/* HEADER */}
       <div style={styles.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={styles.headerTopRow}>
           <img
             className="cb-logo"
             src="/favicon.png"
@@ -1485,8 +1485,12 @@ export default function App() {
               flex: "0 0 auto",
             }}
           />
-          <div className="cb-title" style={styles.title}>
-            Chalkboards
+
+          {/* IMPORTANT: minWidth:0 + overflow rules prevent flex overflow on iOS */}
+          <div style={styles.titleWrap}>
+            <div className="cb-title" style={styles.title}>
+              Chalkboards
+            </div>
           </div>
         </div>
 
@@ -1533,7 +1537,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* CONTROLS SHELL (FIXED NESTING) */}
+      {/* CONTROLS SHELL */}
       <div style={styles.controlsShell}>
         <div
           className="cb-chipRow"
@@ -1710,7 +1714,9 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <div
+              style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}
+            >
               <button
                 onClick={addFlashSpecial}
                 disabled={flashPosting}
@@ -1735,7 +1741,8 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Flash Specials expire automatically. We use the address to drop a pin on the map.
+              Flash Specials expire automatically. We use the address to drop a pin on
+              the map.
             </div>
           </div>
         )}
@@ -1801,13 +1808,23 @@ export default function App() {
                 </select>
               )}
 
-              <TimePicker12 label="Start" value={weeklyStart12} onChange={setWeeklyStart12} />
-              <TimePicker12 label="End" value={weeklyEnd12} onChange={setWeeklyEnd12} />
+              <TimePicker12
+                label="Start"
+                value={weeklyStart12}
+                onChange={setWeeklyStart12}
+              />
+              <TimePicker12
+                label="End"
+                value={weeklyEnd12}
+                onChange={setWeeklyEnd12}
+              />
 
               <div style={{ gridColumn: "1 / -1", fontSize: 12, opacity: 0.9 }}>
                 You chose: <b>{prettyTime12(weeklyStart12)}</b> –{" "}
                 <b>{prettyTime12(weeklyEnd12)}</b>
-                <span style={{ marginLeft: 8, opacity: 0.8 }}>(Overnight is allowed)</span>
+                <span style={{ marginLeft: 8, opacity: 0.8 }}>
+                  (Overnight is allowed)
+                </span>
               </div>
 
               <div style={{ gridColumn: "1 / -1" }}>
@@ -1823,7 +1840,9 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <div
+              style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}
+            >
               <button
                 onClick={addWeeklySpecial}
                 disabled={weeklyPosting}
@@ -1848,7 +1867,8 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Weekly Specials show on the chosen weekday (and overnight tails show after midnight).
+              Weekly Specials show on the chosen weekday (and overnight tails show
+              after midnight).
             </div>
           </div>
         )}
@@ -1896,7 +1916,9 @@ export default function App() {
         )}
       </div>
 
-      <div style={styles.footer}>Closest deals show first (within your chosen distance).</div>
+      <div style={styles.footer}>
+        Closest deals show first (within your chosen distance).
+      </div>
     </div>
   );
 }
@@ -1916,6 +1938,7 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.1,
     lineHeight: 1.35,
   },
+
   header: {
     padding: 14,
     borderRadius: 18,
@@ -1925,8 +1948,22 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
     marginBottom: 12,
   },
+
+  // NEW: fixes title overflow on iPhone
+  headerTopRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+  },
+  // NEW: critical for iOS flex overflow
+  titleWrap: {
+    flex: "1 1 auto",
+    minWidth: 0,
+  },
+
+  // UPDATED: responsive + ellipsis to prevent running off screen
   title: {
-    fontSize: 42,
+    fontSize: "clamp(28px, 7.2vw, 42px)",
     fontWeight: 900,
     letterSpacing: 0.8,
     lineHeight: 1,
@@ -1934,7 +1971,12 @@ const styles: Record<string, React.CSSProperties> = {
       '"Permanent Marker", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
     textShadow:
       "0 2px 0 rgba(0,0,0,0.45), 0 6px 14px rgba(0,0,0,0.45), 0 16px 28px rgba(0,0,0,0.35)",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    maxWidth: "100%",
   },
+
   subtitle: { marginTop: 6, opacity: 0.92, fontSize: 14 },
 
   controlsShell: {
@@ -2101,7 +2143,12 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 8,
   },
-  sectionTitle: { fontSize: 16, fontWeight: 850, opacity: 0.98, letterSpacing: 0.2 },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 850,
+    opacity: 0.98,
+    letterSpacing: 0.2,
+  },
   sectionMeta: { fontSize: 12, opacity: 0.85 },
 
   card: {
