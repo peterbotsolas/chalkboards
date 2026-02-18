@@ -1838,7 +1838,6 @@ export default function App() {
               ) : null}
               {dbStatus === "ok" ? (
                 <span style={{ marginLeft: 10, opacity: 0.85 }}>
-                  Loaded: Flash {dbCounts.flash} • Weekly {dbCounts.weekly}
                 </span>
               ) : null}
             </div>
