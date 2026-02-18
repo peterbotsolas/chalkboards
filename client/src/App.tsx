@@ -384,27 +384,8 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "cheesesteak",
     "chicken sandwich",
   ],
-  breakfast: [
-    "breakfast",
-    "brunch",
-    "pancake",
-    "waffle",
-    "eggs",
-    "omelet",
-    "bacon",
-    "bagel",
-  ],
-  beer: [
-    "beer",
-    "draft",
-    "pint",
-    "ipa",
-    "lager",
-    "brew",
-    "brewery",
-    "bucket",
-    "pitcher",
-  ],
+  breakfast: ["breakfast", "brunch", "pancake", "waffle", "eggs", "omelet", "bacon", "bagel"],
+  beer: ["beer", "draft", "pint", "ipa", "lager", "brew", "brewery", "bucket", "pitcher"],
   cocktails: [
     "drink",
     "drinks",
@@ -419,46 +400,11 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "wine",
     "sangria",
   ],
-  coffee: [
-    "coffee",
-    "espresso",
-    "latte",
-    "cappuccino",
-    "cafe",
-    "iced coffee",
-    "cold brew",
-  ],
-  dessert: [
-    "dessert",
-    "ice cream",
-    "gelato",
-    "cake",
-    "brownie",
-    "cookie",
-    "donut",
-    "cannoli",
-    "cheesecake",
-  ],
+  coffee: ["coffee", "espresso", "latte", "cappuccino", "cafe", "iced coffee", "cold brew"],
+  dessert: ["dessert", "ice cream", "gelato", "cake", "brownie", "cookie", "donut", "cannoli", "cheesecake"],
   happyhour: ["happy hour", "hh", "2-for-1", "two for one", "bogo", "half off"],
-  latenight: [
-    "late night",
-    "after 9",
-    "after 10",
-    "after 11",
-    "midnight",
-    "kitchen open late",
-  ],
-  barfood: [
-    "bar food",
-    "apps",
-    "appetizer",
-    "nachos",
-    "sliders",
-    "wings",
-    "fries",
-    "pub",
-    "tavern",
-  ],
+  latenight: ["late night", "after 9", "after 10", "after 11", "midnight", "kitchen open late"],
+  barfood: ["bar food", "apps", "appetizer", "nachos", "sliders", "wings", "fries", "pub", "tavern"],
 };
 
 function matchesCategory(
@@ -826,13 +772,17 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
   );
 }
 
+type FeedMode = "now" | "upcoming";
+
 export default function App() {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<L.Marker[]>([]);
   const userMarkerRef = useRef<L.Marker | null>(null);
 
-  const [showLaterToday, setShowLaterToday] = useState(true);
+  const [feedMode, setFeedMode] = useState<FeedMode>("upcoming");
+  const showLaterToday = feedMode === "upcoming";
+
   const [radius, setRadius] = useState(10);
 
   const [userLocation, setUserLocation] = useState({ lat: 40.88, lng: -74.07 });
@@ -1090,6 +1040,10 @@ export default function App() {
     category,
   ]);
 
+  const visibleTodayRows = useMemo(() => {
+    return todayRows.filter((r) => (showLaterToday ? true : r.status === "active"));
+  }, [todayRows, showLaterToday]);
+
   const activeFlashInRadiusSorted = useMemo(() => {
     return flashSpecials
       .filter(isFlashActiveNow)
@@ -1134,32 +1088,30 @@ export default function App() {
       }
     };
 
-    // Regular (today)
-    todayRows
-      .filter((r) => (showLaterToday ? true : r.status === "active"))
-      .forEach((r) => {
-        const key = normalizeAddress(r.address);
-        addGroupIfNeeded(key, r.businessName, r.address, r.distance ?? 999999);
+    // Regular (today) — uses visibleTodayRows so mode affects feed
+    visibleTodayRows.forEach((r) => {
+      const key = normalizeAddress(r.address);
+      addGroupIfNeeded(key, r.businessName, r.address, r.distance ?? 999999);
 
-        const g = map.get(key)!;
-        g.businessName = r.businessName;
+      const g = map.get(key)!;
+      g.businessName = r.businessName;
 
-        g.regularItems.push({
-          kind: "regular",
-          businessName: r.businessName,
-          address: r.address,
-          description: r.description,
-          status: r.status,
-          start: r.start,
-          end: r.end,
-          startsInMinutes: r.startsInMinutes,
-          distance: r.distance ?? 999999,
-        });
-
-        if (r.status === "active") g.hasActiveRegular = true;
+      g.regularItems.push({
+        kind: "regular",
+        businessName: r.businessName,
+        address: r.address,
+        description: r.description,
+        status: r.status,
+        start: r.start,
+        end: r.end,
+        startsInMinutes: r.startsInMinutes,
+        distance: r.distance ?? 999999,
       });
 
-    // Flash
+      if (r.status === "active") g.hasActiveRegular = true;
+    });
+
+    // Flash (always “now” by definition, shown in both modes)
     activeFlashInRadiusSorted.forEach(({ f, distance }) => {
       const key = normalizeAddress(f.fullAddress);
       addGroupIfNeeded(key, f.businessName, f.fullAddress, distance);
@@ -1179,7 +1131,7 @@ export default function App() {
       g.flashItems.sort((a, b) => a.expiresInMinutes - b.expiresInMinutes);
       g.regularItems.sort((a, b) => {
         if (a.status !== b.status) return a.status === "active" ? -1 : 1;
-        return toMinutes(a.start) - toMinutes(b.start); // ✅ FIXED (removed extra ')')
+        return toMinutes(a.start) - toMinutes(b.start);
       });
 
       if (g.regularItems.length > 0) {
@@ -1197,7 +1149,7 @@ export default function App() {
     });
 
     return list.slice(0, 5);
-  }, [todayRows, activeFlashInRadiusSorted, showLaterToday, timeTick]);
+  }, [visibleTodayRows, activeFlashInRadiusSorted, timeTick]);
 
   /** =========================
    *  MAP INIT (once)
@@ -1293,8 +1245,8 @@ export default function App() {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 
-    // Regular
-    todayRows.forEach((row) => {
+    // Regular — uses visibleTodayRows so mode affects markers
+    visibleTodayRows.forEach((row) => {
       const key = normalizeAddress(row.address);
       upsert(key, {
         businessName: row.businessName,
@@ -1310,7 +1262,7 @@ export default function App() {
       });
     });
 
-    // Flash
+    // Flash (always shown)
     activeFlashInRadiusSorted.forEach(({ f }) => {
       const key = normalizeAddress(f.fullAddress);
       upsert(key, {
@@ -1366,7 +1318,7 @@ export default function App() {
 
       markersRef.current.push(marker);
     });
-  }, [todayRows, wingIcon, activeFlashInRadiusSorted]);
+  }, [visibleTodayRows, wingIcon, activeFlashInRadiusSorted]);
 
   /** =========================
    *  LOCATE ME
@@ -1643,6 +1595,14 @@ export default function App() {
     };
   };
 
+  const segmentBtn = (active: boolean): React.CSSProperties => ({
+    ...styles.segmentBtn,
+    border: active
+      ? "1px solid rgba(0, 140, 255, 0.55)"
+      : "1px solid rgba(255,255,255,0.12)",
+    background: active ? "rgba(0, 140, 255, 0.18)" : "rgba(255,255,255,0.05)",
+  });
+
   const formField = (label: string, child: React.ReactNode) => (
     <div style={{ display: "grid", gap: 6 }}>
       <div style={styles.label}>{label}</div>
@@ -1798,15 +1758,26 @@ export default function App() {
           </div>
         </div>
 
+        {/* 🔥 Happening Now / 🔜 Upcoming */}
         <div className="cb-controlsFooterRow" style={styles.controlsFooterRow}>
-          <label style={styles.togglePill}>
-            <input
-              type="checkbox"
-              checked={showLaterToday}
-              onChange={(e) => setShowLaterToday(e.target.checked)}
-            />
-            <span style={{ marginLeft: 8 }}>Include upcoming specials</span>
-          </label>
+          <div style={styles.segmentWrap} aria-label="Feed mode">
+            <button
+              type="button"
+              onClick={() => setFeedMode("now")}
+              style={segmentBtn(feedMode === "now")}
+              title="Only active specials"
+            >
+              🔥 Happening Now
+            </button>
+            <button
+              type="button"
+              onClick={() => setFeedMode("upcoming")}
+              style={segmentBtn(feedMode === "upcoming")}
+              title="Active + later today"
+            >
+              🔜 Upcoming
+            </button>
+          </div>
         </div>
 
         {showFlashForm && (
@@ -2067,6 +2038,10 @@ export default function App() {
                 ? "All categories"
                 : CATEGORIES.find((c) => c.key === category)?.label}
             </span>
+            <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
+            <span style={{ opacity: 0.9 }}>
+              {feedMode === "now" ? "🔥 Happening Now" : "🔜 Upcoming"}
+            </span>
             {searchTerm.trim() ? (
               <>
                 <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
@@ -2274,17 +2249,29 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
   },
 
-  togglePill: {
+  // 🔥/🔜 segmented control
+  segmentWrap: {
     display: "flex",
+    gap: 8,
     alignItems: "center",
-    padding: "9px 12px",
+    flexWrap: "wrap",
+    padding: "8px 10px",
     borderRadius: 999,
     background: "rgba(255,255,255,0.045)",
     border: "1px solid rgba(255,255,255,0.10)",
+  },
+  segmentBtn: {
+    padding: "9px 12px",
+    borderRadius: 999,
+    color: "#f2f2f2",
     cursor: "pointer",
+    fontWeight: 900,
+    letterSpacing: 0.15,
+    lineHeight: 1,
     whiteSpace: "nowrap",
+    transition: "transform 140ms ease, box-shadow 140ms ease, filter 140ms ease",
+    userSelect: "none",
     fontSize: 13,
-    fontWeight: 650,
   },
 
   map: {
