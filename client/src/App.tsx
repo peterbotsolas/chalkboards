@@ -632,7 +632,7 @@ export default function App() {
   const [reloadTick, setReloadTick] = useState(0);
 
   /** =========================
-   *  LOAD FROM SUPABASE (and refresh)
+   *  LOAD FROM SUPABASE
    *  ========================= */
   useEffect(() => {
     let cancelled = false;
@@ -789,7 +789,6 @@ export default function App() {
       }
     }
 
-    // SEARCH + CATEGORY FILTER
     const filtered = rows
       .filter((r) =>
         includesSearch(searchTerm, r.businessName, r.address, r.description)
@@ -1125,9 +1124,10 @@ export default function App() {
             mapRef.current.setView([newLocation.lat, newLocation.lng], 12);
 
             if (userMarkerRef.current) userMarkerRef.current.remove();
-            userMarkerRef.current = L.marker([newLocation.lat, newLocation.lng], {
-              icon: userIcon,
-            })
+            userMarkerRef.current = L.marker(
+              [newLocation.lat, newLocation.lng],
+              { icon: userIcon }
+            )
               .addTo(mapRef.current)
               .bindPopup("You are here")
               .openPopup();
@@ -1239,15 +1239,7 @@ export default function App() {
     const description = weeklyDescription.trim();
     const day = weeklyDay;
 
-    if (
-      !typedName ||
-      !street ||
-      !city ||
-      !state ||
-      !zip ||
-      !description ||
-      !day
-    ) {
+    if (!typedName || !street || !city || !state || !zip || !description) {
       alert(
         "Please fill in ALL fields (name, address, day, time window, special)."
       );
@@ -1389,41 +1381,11 @@ export default function App() {
     </div>
   );
 
-  const groupedTopFeedForRender = groupedTopFeed;
-
   return (
     <div style={styles.page}>
-      <style>{`
-        .cb-chipRow::-webkit-scrollbar { display: none; }
-
-        /* MAP: more screen on mobile */
-        .cb-map { height: clamp(260px, 44vh, 420px); }
-
-        /* MOBILE TIGHT MODE */
-        @media (max-width: 520px) {
-          .cb-title { font-size: 32px !important; }
-          .cb-logo { height: 42px !important; }
-          .cb-subtitle { font-size: 12px !important; line-height: 1.25 !important; }
-
-          .cb-controlsRow { flex-direction: column !important; align-items: stretch !important; }
-          .cb-groupLeft, .cb-groupRight {
-            width: 100% !important;
-            justify-content: space-between !important;
-          }
-
-          .cb-searchField { width: 100% !important; min-width: 0 !important; flex: 1 1 auto !important; }
-          .cb-searchInput { width: 100% !important; flex: 1 1 auto !important; min-width: 0 !important; }
-
-          .cb-controlsFooterRow { flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; }
-
-          .cb-map {
-            height: calc(100vh - 430px);
-            min-height: 320px;
-            max-height: 520px;
-          }
-        }
-      `}</style>
-
+      {/* HEADER */}
+      <div style={styles.header}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <img
             className="cb-logo"
             src="/favicon.png"
@@ -1436,7 +1398,10 @@ export default function App() {
               borderRadius: 16,
               objectFit: "contain",
               display: "block",
-              f
+              filter: "drop-shadow(0 8px 18px rgba(0,0,0,0.35))",
+              flex: "0 0 auto",
+            }}
+          />
 
           <div className="cb-title" style={styles.title}>
             Chalkboards
@@ -1486,6 +1451,7 @@ export default function App() {
         </div>
       </div>
 
+      {/* CONTROLS SHELL (this was the broken part in your file) */}
       <div style={styles.controlsShell}>
         <div
           className="cb-chipRow"
@@ -1694,8 +1660,8 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Flash Specials expire automatically. We use the address to drop a pin
-              on the map.
+              Flash Specials expire automatically. We use the address to drop a
+              pin on the map.
             </div>
           </div>
         )}
@@ -1825,15 +1791,17 @@ export default function App() {
             </div>
 
             <div style={styles.microcopy}>
-              Weekly Specials show on the chosen weekday (and overnight tails show
-              after midnight).
+              Weekly Specials show on the chosen weekday (and overnight tails
+              show after midnight).
             </div>
           </div>
         )}
       </div>
 
+      {/* MAP */}
       <div ref={mapContainerRef} className="cb-map" style={styles.map} />
 
+      {/* TOP FEED */}
       <div style={styles.section}>
         <div style={styles.sectionHeaderRow}>
           <div style={styles.sectionTitle}>Top 5 Near You</div>
@@ -1858,7 +1826,7 @@ export default function App() {
           </div>
         </div>
 
-        {groupedTopFeedForRender.length === 0 ? (
+        {groupedTopFeed.length === 0 ? (
           <div style={styles.card}>
             <div style={styles.cardTitle}>No nearby specials right now</div>
             <div style={styles.cardText}>
@@ -1868,10 +1836,7 @@ export default function App() {
             </div>
           </div>
         ) : (
-
-          groupedTopFeedForRender.map((g) => (
-            <GroupedCard key={g.key} group={g} />
-          ))
+          groupedTopFeed.map((g) => <GroupedCard key={g.key} group={g} />)
         )}
       </div>
 
@@ -1994,21 +1959,18 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 12,
   },
   title: {
-    fontSize: 42,              // ✅ BIGGER
+    fontSize: 42,
     fontWeight: 900,
-    letterSpacing: 0.8,        // more logo feel
-    lineHeight: 1,             // tighter
+    letterSpacing: 0.8,
+    lineHeight: 1,
     fontFamily:
       '"Permanent Marker", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
-
-    // ✅ makes it stand out
     textShadow: `
       0 2px 0 rgba(0,0,0,0.45),
       0 6px 14px rgba(0,0,0,0.45),
       0 16px 28px rgba(0,0,0,0.35)
     `,
   },
-
   subtitle: { marginTop: 6, opacity: 0.92, fontSize: 14 },
 
   controlsShell: {
@@ -2072,7 +2034,6 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.10)",
   },
 
-  /* ✅ UPDATED: mobile-safe sizing */
   searchField: {
     display: "flex",
     alignItems: "center",
@@ -2117,7 +2078,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
   },
 
-  /* ✅ UPDATED: mobile-safe sizing */
   searchInput: {
     background: "rgba(20,20,20,0.35)",
     color: "#f2f2f2",
@@ -2158,7 +2118,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 650,
   },
-  hintText: { fontSize: 12, opacity: 0.75, letterSpacing: 0.1 },
 
   map: {
     height: 270,
