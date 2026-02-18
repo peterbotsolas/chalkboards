@@ -11,6 +11,18 @@ const SUPABASE_ANON_KEY = "sb_publishable_b6cy5vUSAFkVxWkRyYJSUw_FagY1_5D";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /** =========================
+ *  SUPPORT / REPORTING
+ *  ========================= */
+const SUPPORT_EMAIL = "chalkboards.app@gmail.com";
+
+/** =========================
+ *  CONSISTENT ICONS
+ *  ========================= */
+const ICON_NOW = "🔥";
+const ICON_UPCOMING = "🕒";
+const ICON_FLASH = "⚡";
+
+/** =========================
  *  TYPES
  *  ========================= */
 type Weekday =
@@ -226,6 +238,36 @@ function includesSearch(
   return false;
 }
 
+function statusIcon(status: "active" | "later") {
+  return status === "active" ? ICON_NOW : ICON_UPCOMING;
+}
+
+/** Report Issue -> opens email to SUPPORT_EMAIL with prefilled context */
+function makeReportMailto(params: {
+  businessName: string;
+  address: string;
+  description?: string;
+  kind: "flash" | "weekly";
+}) {
+  const subject = `Chalkboards Report Issue — ${params.businessName}`;
+  const bodyLines = [
+    "Report issue:",
+    "",
+    `Business: ${params.businessName}`,
+    `Address: ${params.address}`,
+    `Type: ${params.kind}`,
+    params.description ? `Special: ${params.description}` : "",
+    "",
+    "What’s wrong? (tell us):",
+    "",
+  ].filter(Boolean);
+
+  const body = bodyLines.join("\n");
+  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(
+    subject
+  )}&body=${encodeURIComponent(body)}`;
+}
+
 /** =========================
  *  CATEGORY FILTERS
  *  ========================= */
@@ -384,8 +426,27 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "cheesesteak",
     "chicken sandwich",
   ],
-  breakfast: ["breakfast", "brunch", "pancake", "waffle", "eggs", "omelet", "bacon", "bagel"],
-  beer: ["beer", "draft", "pint", "ipa", "lager", "brew", "brewery", "bucket", "pitcher"],
+  breakfast: [
+    "breakfast",
+    "brunch",
+    "pancake",
+    "waffle",
+    "eggs",
+    "omelet",
+    "bacon",
+    "bagel",
+  ],
+  beer: [
+    "beer",
+    "draft",
+    "pint",
+    "ipa",
+    "lager",
+    "brew",
+    "brewery",
+    "bucket",
+    "pitcher",
+  ],
   cocktails: [
     "drink",
     "drinks",
@@ -400,11 +461,46 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "wine",
     "sangria",
   ],
-  coffee: ["coffee", "espresso", "latte", "cappuccino", "cafe", "iced coffee", "cold brew"],
-  dessert: ["dessert", "ice cream", "gelato", "cake", "brownie", "cookie", "donut", "cannoli", "cheesecake"],
+  coffee: [
+    "coffee",
+    "espresso",
+    "latte",
+    "cappuccino",
+    "cafe",
+    "iced coffee",
+    "cold brew",
+  ],
+  dessert: [
+    "dessert",
+    "ice cream",
+    "gelato",
+    "cake",
+    "brownie",
+    "cookie",
+    "donut",
+    "cannoli",
+    "cheesecake",
+  ],
   happyhour: ["happy hour", "hh", "2-for-1", "two for one", "bogo", "half off"],
-  latenight: ["late night", "after 9", "after 10", "after 11", "midnight", "kitchen open late"],
-  barfood: ["bar food", "apps", "appetizer", "nachos", "sliders", "wings", "fries", "pub", "tavern"],
+  latenight: [
+    "late night",
+    "after 9",
+    "after 10",
+    "after 11",
+    "midnight",
+    "kitchen open late",
+  ],
+  barfood: [
+    "bar food",
+    "apps",
+    "appetizer",
+    "nachos",
+    "sliders",
+    "wings",
+    "fries",
+    "pub",
+    "tavern",
+  ],
 };
 
 function matchesCategory(
@@ -511,14 +607,6 @@ type DbSpecialRow = {
   lat: number | null;
   lng: number | null;
 };
-
-function normalizeWeekday(input: any): Weekday | null {
-  const s = String(input ?? "").trim();
-  if (!s) return null;
-  const lower = s.toLowerCase();
-  const found = WEEKDAYS.find((d) => d.toLowerCase() === lower);
-  return found ?? null;
-}
 
 function tryParseWeeklyMeta(
   extra: any | null
@@ -693,6 +781,14 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
     group.distance >= 999999 ? "" : `${group.distance.toFixed(1)} mi`;
   const flashSoonest = hasFlash ? group.flashItems[0] : null;
 
+  const reportHref = makeReportMailto({
+    businessName: group.businessName || "Business",
+    address: group.address || "",
+    description:
+      group.flashItems[0]?.description || group.regularItems[0]?.description,
+    kind: group.flashItems.length > 0 ? "flash" : "weekly",
+  });
+
   return (
     <div style={styles.card}>
       <div style={styles.cardTop}>
@@ -713,7 +809,7 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
         <div style={{ marginTop: 10 }}>
           {group.flashItems.slice(0, 2).map((f, idx) => (
             <div key={`f-${idx}`} style={styles.cardText}>
-              ⚡ {f.description}
+              {ICON_FLASH} {f.description}
             </div>
           ))}
           {group.flashItems.length > 2 && (
@@ -728,7 +824,7 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
         <div style={{ marginTop: group.flashItems.length > 0 ? 12 : 8 }}>
           {group.regularItems.slice(0, 2).map((r, idx) => (
             <div key={`r-${idx}`} style={styles.cardText}>
-              {r.status === "active" ? "🔥" : "🕒"} {r.description}
+              {statusIcon(r.status)} {r.description}
               <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
                 {prettyWindow(r.start, r.end)}
               </div>
@@ -742,7 +838,7 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
         </div>
       )}
 
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
         <a
           href={mapsUrlFromAddress(group.address)}
           target="_blank"
@@ -750,6 +846,10 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
           style={styles.mapLink}
         >
           Open in Maps
+        </a>
+
+        <a href={reportHref} style={styles.reportLink}>
+          Report issue
         </a>
       </div>
 
@@ -1088,7 +1188,7 @@ export default function App() {
       }
     };
 
-    // Regular (today) — uses visibleTodayRows so mode affects feed
+    // Regular (today) — mode affects feed
     visibleTodayRows.forEach((r) => {
       const key = normalizeAddress(r.address);
       addGroupIfNeeded(key, r.businessName, r.address, r.distance ?? 999999);
@@ -1111,7 +1211,7 @@ export default function App() {
       if (r.status === "active") g.hasActiveRegular = true;
     });
 
-    // Flash (always “now” by definition, shown in both modes)
+    // Flash (always shown)
     activeFlashInRadiusSorted.forEach(({ f, distance }) => {
       const key = normalizeAddress(f.fullAddress);
       addGroupIfNeeded(key, f.businessName, f.fullAddress, distance);
@@ -1183,7 +1283,7 @@ export default function App() {
   }, [userLocation.lat, userLocation.lng]);
 
   /** =========================
-   *  MAP MARKERS UPDATE
+   *  MAP MARKERS UPDATE (+ Report Issue in popup)
    *  ========================= */
   useEffect(() => {
     if (!mapRef.current) return;
@@ -1245,7 +1345,7 @@ export default function App() {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 
-    // Regular — uses visibleTodayRows so mode affects markers
+    // Regular — mode affects markers
     visibleTodayRows.forEach((row) => {
       const key = normalizeAddress(row.address);
       upsert(key, {
@@ -1254,7 +1354,7 @@ export default function App() {
         lat: row.lat,
         lng: row.lng,
         regularLines: [
-          `${row.status === "active" ? "🔥" : "🕒"} ${row.description} (${prettyWindow(
+          `${statusIcon(row.status)} ${row.description} (${prettyWindow(
             row.start,
             row.end
           )})`,
@@ -1270,7 +1370,7 @@ export default function App() {
         address: f.fullAddress,
         lat: f.lat,
         lng: f.lng,
-        flashLines: [`⚡ ${f.description}`],
+        flashLines: [`${ICON_FLASH} ${f.description}`],
       });
     });
 
@@ -1279,6 +1379,13 @@ export default function App() {
 
       const flashLines = Array.from(new Set(b.flashLines));
       const regularLines = Array.from(new Set(b.regularLines));
+
+      const reportHref = makeReportMailto({
+        businessName: b.businessName || "Business",
+        address: b.address || "",
+        description: flashLines[0] || regularLines[0] || "",
+        kind: flashLines.length > 0 ? "flash" : "weekly",
+      });
 
       const flashHtml =
         flashLines.length > 0
@@ -1302,15 +1409,16 @@ export default function App() {
             </div>`
           : "";
 
-      const mapsLink = `<div style="margin-top:10px;">
+      const linksHtml = `<div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
           <a href="${mapsUrlFromAddress(
             b.address
           )}" target="_blank" rel="noopener noreferrer">Open in Maps</a>
+          <a href="${reportHref}">Report issue</a>
         </div>`;
 
       const popupHtml = `<b>${esc(b.businessName || "Business")}</b><br>${esc(
         b.address
-      )}${flashHtml}${regularHtml}${mapsLink}`;
+      )}${flashHtml}${regularHtml}${linksHtml}`;
 
       const marker = L.marker([b.lat, b.lng], { icon: wingIcon })
         .addTo(mapRef.current!)
@@ -1767,7 +1875,7 @@ export default function App() {
               style={segmentBtn(feedMode === "now")}
               title="Only active specials"
             >
-              🔥 Happening Now
+              {ICON_NOW} Happening Now
             </button>
             <button
               type="button"
@@ -1775,7 +1883,7 @@ export default function App() {
               style={segmentBtn(feedMode === "upcoming")}
               title="Active + later today"
             >
-              🕒 Upcoming
+              {ICON_UPCOMING} Upcoming
             </button>
           </div>
         </div>
@@ -2040,7 +2148,9 @@ export default function App() {
             </span>
             <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
             <span style={{ opacity: 0.9 }}>
-              {feedMode === "now" ? "🔥 Happening Now" : "🕒 Upcoming"}
+              {feedMode === "now"
+                ? `${ICON_NOW} Happening Now`
+                : `${ICON_UPCOMING} Upcoming`}
             </span>
             {searchTerm.trim() ? (
               <>
@@ -2068,12 +2178,21 @@ export default function App() {
       </div>
 
       <div style={styles.footer}>
-        Closest deals show first (within your chosen distance).
+        Closest deals show first (within your chosen distance). • Support:{" "}
+        <a
+          href={`mailto:${SUPPORT_EMAIL}`}
+          style={{ color: "#f2f2f2", textDecoration: "underline" }}
+        >
+          {SUPPORT_EMAIL}
+        </a>
       </div>
     </div>
   );
 }
 
+/** =========================
+ *  STYLES
+ *  ========================= */
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
@@ -2249,7 +2368,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
   },
 
-  // 🔥/🕒 segmented control
   segmentWrap: {
     display: "flex",
     gap: 8,
@@ -2370,6 +2488,20 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
   },
 
+  reportLink: {
+    display: "inline-block",
+    padding: "9px 12px",
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    color: "#f2f2f2",
+    textDecoration: "none",
+    fontWeight: 850,
+    letterSpacing: 0.2,
+    fontSize: 13,
+    opacity: 0.95,
+  },
+
   footer: { marginTop: 16, opacity: 0.72, fontSize: 12, lineHeight: 1.4 },
 
   formCard: {
@@ -2386,7 +2518,6 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.3,
     marginBottom: 10,
   },
-  // Responsive without media queries: auto-fit columns
   formGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
