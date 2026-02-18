@@ -1471,72 +1471,53 @@ export default function App() {
     <div style={styles.page}>
       {/* HEADER */}
       <div style={styles.header}>
-        <div style={styles.headerTopRow}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <img
-            className="cb-logo"
             src="/favicon.png"
             alt="Chalkboards"
             style={{
-              width: 72,
-              height: 72,
-              padding: 6,
-              boxSizing: "border-box",
-              borderRadius: 16,
+              width: 64,
+              height: 64,
+              borderRadius: 14,
               objectFit: "contain",
-              display: "block",
-              filter: "drop-shadow(0 8px 18px rgba(0,0,0,0.35))",
-              flex: "0 0 auto",
             }}
           />
 
-          {/* IMPORTANT: minWidth:0 + overflow rules prevent flex overflow on iOS */}
-          <div style={styles.titleWrap}>
+          <div>
             <div className="cb-title" style={styles.title}>
               Chalkboards
+            </div>
+
+            <div style={styles.subtitle}>
+              Live Local Specials • <b>{today}</b> • {format12Hour(new Date())}
             </div>
           </div>
         </div>
 
-        <div className="cb-subtitle" style={styles.subtitle}>
-          <span style={{ opacity: 0.9 }}>{"Live Local Specials"}</span>
-          <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
-          <b style={{ fontWeight: 800 }}>{today}</b>
-          <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
-          <span style={{ opacity: 0.9 }}>{format12Hour(new Date())}</span>
-          <span style={{ opacity: 0.55, margin: "0 8px" }}>•</span>
+        <div style={{ marginTop: 8, fontSize: 13 }}>
+          Database:{" "}
+          {dbStatus === "ok" ? (
+            <span style={{ color: "#00FF00" }}>
+              <b>LIVE</b>
+            </span>
+          ) : dbStatus === "loading" ? (
+            <b>Loading…</b>
+          ) : dbStatus === "error" ? (
+            <span style={{ color: "#ff6b6b" }}>
+              <b>Blocked</b> {dbErrorText && `(${dbErrorText})`}
+            </span>
+          ) : (
+            <b>—</b>
+          )}
+        </div>
 
-          <span style={{ opacity: 0.9 }}>
-            Database:{" "}
-            {dbStatus === "ok" ? (
-              <span style={{ color: "#00FF00", fontFamily: "monospace" }}>
-                <b>LIVE</b>
-              </span>
-            ) : dbStatus === "loading" ? (
-              <b>Loading…</b>
-            ) : dbStatus === "error" ? (
-              <span style={{ color: "#ff6b6b" }}>
-                <b>Blocked</b>
-                {dbErrorText ? (
-                  <span style={{ marginLeft: 8, opacity: 0.9 }}>
-                    ({dbErrorText})
-                  </span>
-                ) : null}
-              </span>
-            ) : (
-              <b>—</b>
-            )}
-          </span>
-
-          <span style={{ marginLeft: 10 }}>
-            <button
-              onClick={() => setReloadTick((x) => x + 1)}
-              style={buttonStyle("refreshdb", "secondary")}
-              onMouseEnter={() => setHovered("refreshdb")}
-              onMouseLeave={() => setHovered(null)}
-            >
-              Refresh
-            </button>
-          </span>
+        <div style={{ marginTop: 6 }}>
+          <button
+            onClick={() => setReloadTick((x) => x + 1)}
+            style={buttonStyle("refreshdb", "secondary")}
+          >
+            Refresh
+          </button>
         </div>
       </div>
 
