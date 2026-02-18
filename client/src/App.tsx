@@ -608,27 +608,75 @@ type DbSpecialRow = {
   lng: number | null;
 };
 
+function normLower(x: any): string {
+  return String(x ?? "").trim().toLowerCase();
+}
+
+function isApprovedStatus(status: any): boolean {
+  // Treat NULL as approved so legacy rows don't disappear
+  if (status == null) return true;
+  const s = normLower(status);
+  return s === "approved" || s === "approve" || s === "live" || s === "published";
+}
+
+function isFlashType(t: any): boolean {
+  const s = normLower(t);
+  return s === "flash" || s === "f" || s === "flash_special";
+}
+
+function isWeeklyType(t: any): boolean {
+  const s = normLower(t);
+  return s === "weekly" || s === "w" || s === "weekly_special";
+}
+
+function normalizeWeekday(input: any): Weekday | null {
+  const s = String(input ?? "").trim().toLowerCase();
+  if (!s) return null;
+
+  const map: Record<string, Weekday> = {
+    sun: "Sunday",
+    sunday: "Sunday",
+    mon: "Monday",
+    monday: "Monday",
+    tue: "Tuesday",
+    tues: "Tuesday",
+    tuesday: "Tuesday",
+    wed: "Wednesday",
+    weds: "Wednesday",
+    wednesday: "Wednesday",
+    thu: "Thursday",
+    thur: "Thursday",
+    thurs: "Thursday",
+    thursday: "Thursday",
+    fri: "Friday",
+    friday: "Friday",
+    sat: "Saturday",
+    saturday: "Saturday",
+  };
+
+  return map[s] ?? null;
+}
+
 function tryParseWeeklyMeta(
   extra: any | null
 ): { day: Weekday; start: string; end: string } | null {
   if (!extra) return null;
 
-  if (typeof extra === "object") {
-    const day = normalizeWeekday(extra.day);
-    const start = String(extra.start ?? "").trim();
-    const end = String(extra.end ?? "").trim();
+  const coerce = (obj: any) => {
+    const day = normalizeWeekday(obj?.day);
+    const start = String(obj?.start ?? "").trim();
+    const end = String(obj?.end ?? "").trim();
     if (!day || !start || !end) return null;
     return { day, start, end };
-  }
+  };
+
+  if (typeof extra === "object") return coerce(extra);
 
   if (typeof extra === "string") {
+    const trimmed = extra.trim();
+    if (!trimmed) return null;
     try {
-      const obj = JSON.parse(extra);
-      const day = normalizeWeekday(obj?.day);
-      const start = String(obj?.start ?? "").trim();
-      const end = String(obj?.end ?? "").trim();
-      if (!day || !start || !end) return null;
-      return { day, start, end };
+      return coerce(JSON.parse(trimmed));
     } catch {
       return null;
     }
@@ -637,13 +685,29 @@ function tryParseWeeklyMeta(
   return null;
 }
 
+function splitAddress(fullAddress: string) {
+  const parts = fullAddress.split(",").map((x) => x.trim());
+  const street = parts[0] ?? "";
+  const city = parts[1] ?? "";
+  let state = "";
+  let zip = "";
+  if (parts[2]) {
+    const p = parts[2].split(" ").filter(Boolean);
+    state = p[0] ?? "";
+    zip = p[1] ?? "";
+  }
+  return { street, city, state, zip };
+}
+
 function rowsToFlash(rows: DbSpecialRow[]): FlashSpecial[] {
   const list: FlashSpecial[] = [];
   for (const r of rows) {
-    if (r.type !== "flash") continue;
-    if (r.status !== "approved") continue;
+    if (!isFlashType(r.type)) continue;
+    if (!isApprovedStatus(r.status)) continue;
     if (!r.address || !r.business_name || !r.deal) continue;
     if (r.lat == null || r.lng == null) continue;
+
+    // expires_at required for flash to show
     if (!r.expires_at) continue;
 
     const createdAt = new Date(r.created_at).getTime();
@@ -651,16 +715,7 @@ function rowsToFlash(rows: DbSpecialRow[]): FlashSpecial[] {
     if (!Number.isFinite(createdAt) || !Number.isFinite(expiresAt)) continue;
 
     const fullAddress = r.address;
-    const parts = fullAddress.split(",").map((x) => x.trim());
-    const street = parts[0] ?? "";
-    const city = parts[1] ?? "";
-    let state = "";
-    let zip = "";
-    if (parts[2]) {
-      const p = parts[2].split(" ").filter(Boolean);
-      state = p[0] ?? "";
-      zip = p[1] ?? "";
-    }
+    const { street, city, state, zip } = splitAddress(fullAddress);
 
     list.push({
       id: r.id,
@@ -677,14 +732,15 @@ function rowsToFlash(rows: DbSpecialRow[]): FlashSpecial[] {
       expiresAt,
     });
   }
+  // Only show active flash specials (by design)
   return list.filter(isFlashActiveNow);
 }
 
 function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
   const list: WeeklySpecial[] = [];
   for (const r of rows) {
-    if (r.type !== "weekly") continue;
-    if (r.status !== "approved") continue;
+    if (!isWeeklyType(r.type)) continue;
+    if (!isApprovedStatus(r.status)) continue; // approved items show
     if (!r.address || !r.business_name || !r.deal) continue;
     if (r.lat == null || r.lng == null) continue;
 
@@ -695,16 +751,7 @@ function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
     if (!Number.isFinite(createdAt)) continue;
 
     const fullAddress = r.address;
-    const parts = fullAddress.split(",").map((x) => x.trim());
-    const street = parts[0] ?? "";
-    const city = parts[1] ?? "";
-    let state = "";
-    let zip = "";
-    if (parts[2]) {
-      const p = parts[2].split(" ").filter(Boolean);
-      state = p[0] ?? "";
-      zip = p[1] ?? "";
-    }
+    const { street, city, state, zip } = splitAddress(fullAddress);
 
     list.push({
       id: r.id,
@@ -893,6 +940,10 @@ export default function App() {
     "idle"
   );
   const [dbErrorText, setDbErrorText] = useState<string>("");
+  const [dbCounts, setDbCounts] = useState<{ flash: number; weekly: number }>({
+    flash: 0,
+    weekly: 0,
+  });
 
   useEffect(() => {
     ensureFontsLoaded();
@@ -981,12 +1032,31 @@ export default function App() {
         setDbErrorText(error.message || "Unknown Supabase error");
         setFlashSpecials([]);
         setWeeklySpecials([]);
+        setDbCounts({ flash: 0, weekly: 0 });
         return;
       }
 
       const rows = (data ?? []) as DbSpecialRow[];
-      setFlashSpecials(rowsToFlash(rows));
-      setWeeklySpecials(rowsToWeekly(rows));
+
+      // IMPORTANT: never let weekly parsing kill flash
+      let nextFlash: FlashSpecial[] = [];
+      let nextWeekly: WeeklySpecial[] = [];
+      try {
+        nextFlash = rowsToFlash(rows);
+      } catch (e) {
+        console.log("FLASH PARSE ERROR:", e);
+        nextFlash = [];
+      }
+      try {
+        nextWeekly = rowsToWeekly(rows);
+      } catch (e) {
+        console.log("WEEKLY PARSE ERROR:", e);
+        nextWeekly = [];
+      }
+
+      setFlashSpecials(nextFlash);
+      setWeeklySpecials(nextWeekly);
+      setDbCounts({ flash: nextFlash.length, weekly: nextWeekly.length });
       setDbStatus("ok");
     }
 
@@ -1764,6 +1834,11 @@ export default function App() {
               {dbStatus === "error" && dbErrorText ? (
                 <span style={{ marginLeft: 10, opacity: 0.85 }}>
                   ({dbErrorText})
+                </span>
+              ) : null}
+              {dbStatus === "ok" ? (
+                <span style={{ marginLeft: 10, opacity: 0.85 }}>
+                  Loaded: Flash {dbCounts.flash} • Weekly {dbCounts.weekly}
                 </span>
               ) : null}
             </div>
