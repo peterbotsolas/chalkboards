@@ -1650,7 +1650,17 @@ export default function App() {
           {dbStatus === "ok" ? (
             <span style={{ color: "#00FF00" }}>
               <b>LIVE</b>
-            </span>
+    <span
+      onClick={() => setReloadTick((x) => x + 1)}
+      style={{
+        color: "#00FF00",
+        fontWeight: 900,
+        cursor: "pointer",
+      }}
+      title="Tap to refresh"
+    >
+      LIVE ↻
+    </span>
           ) : dbStatus === "loading" ? (
             <b>Loading…</b>
           ) : dbStatus === "error" ? (
@@ -1662,16 +1672,6 @@ export default function App() {
           )}
         </div>
 
-        <div style={{ marginTop: 6 }}>
-          <button
-            onClick={() => setReloadTick((x) => x + 1)}
-            style={buttonStyle("refreshdb", "secondary")}
-            onMouseEnter={() => setHovered("refreshdb")}
-            onMouseLeave={() => setHovered(null)}
-          >
-            Refresh
-          </button>
-        </div>
       </div>
 
       {/* CONTROLS SHELL */}
