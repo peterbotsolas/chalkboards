@@ -232,7 +232,7 @@ function includesSearch(
 type CategoryKey =
   | "all"
   | "wings"
-  | "tacos"
+  | "mexican"
   | "pizza"
   | "burgers"
   | "sushi"
@@ -253,7 +253,7 @@ type CategoryKey =
 const CATEGORIES: Array<{ key: CategoryKey; label: string; emoji: string }> = [
   { key: "all", label: "All", emoji: "🗺️" },
   { key: "wings", label: "Wings", emoji: "🍗" },
-  { key: "tacos", label: "Tacos", emoji: "🌮" },
+  { key: "mexican", label: "Mexican", emoji: "🌮" },
   { key: "pizza", label: "Pizza", emoji: "🍕" },
   { key: "burgers", label: "Burgers", emoji: "🍔" },
   { key: "sushi", label: "Sushi", emoji: "🍣" },
@@ -275,15 +275,53 @@ const CATEGORIES: Array<{ key: CategoryKey; label: string; emoji: string }> = [
 const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
   all: [],
   wings: ["wing", "wings", "boneless", "tenders", "drum", "flat"],
-  tacos: [
+  mexican: [
+    // general / cuisine
+    "mexican",
+    "taqueria",
+    "cantina",
+    "tex-mex",
+    "tortilla",
+
+    // tacos + variants
     "taco",
     "tacos",
     "taco tuesday",
     "birria",
-    "quesadilla",
-    "nacho",
+    "quesabirria",
+    "al pastor",
+    "pastor",
+    "barbacoa",
+    "carnitas",
+    "carne asada",
+
+    // burritos / quesadillas / nachos
     "burrito",
-    "taqueria",
+    "burritos",
+    "quesadilla",
+    "quesadillas",
+    "nacho",
+    "nachos",
+
+    // classics + sides
+    "enchilada",
+    "enchiladas",
+    "fajita",
+    "fajitas",
+    "tostada",
+    "tostadas",
+    "tamale",
+    "tamales",
+    "elote",
+    "guac",
+    "guacamole",
+    "salsa",
+    "chips",
+
+    // drinks commonly tied to specials
+    "margarita",
+    "margaritas",
+    "tequila",
   ],
   pizza: ["pizza", "slice", "pie", "pizzeria", "stromboli", "calzone"],
   burgers: ["burger", "cheeseburger", "patty", "smashburger", "fries"],
@@ -1150,7 +1188,7 @@ export default function App() {
       g.flashItems.sort((a, b) => a.expiresInMinutes - b.expiresInMinutes);
       g.regularItems.sort((a, b) => {
         if (a.status !== b.status) return a.status === "active" ? -1 : 1;
-        return toMinutes(a.start) - toMinutes(b.start);
+        return toMinutes(a.start) - toMinutes(b.start));
       });
 
       if (g.regularItems.length > 0) {
@@ -1977,7 +2015,7 @@ export default function App() {
                   <input
                     value={weeklyDescription}
                     onChange={(e) => setWeeklyDescription(e.target.value)}
-                    placeholder='Example: "Taco Tuesday — 2 tacos + soda for $9"'
+                    placeholder='Example: "Mexican Night — tacos + margarita special"'
                     style={styles.input}
                   />
                 )}
