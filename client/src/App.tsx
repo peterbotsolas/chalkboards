@@ -1,3 +1,4 @@
+```tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -284,6 +285,8 @@ type CategoryKey =
   | "med"
   | "sandwiches"
   | "breakfast"
+  | "lunch"
+  | "buffet"
   | "beer"
   | "cocktails"
   | "coffee"
@@ -305,6 +308,11 @@ const CATEGORIES: Array<{ key: CategoryKey; label: string; emoji: string }> = [
   { key: "med", label: "Mediterranean", emoji: "🥙" },
   { key: "sandwiches", label: "Sandwiches", emoji: "🥪" },
   { key: "breakfast", label: "Breakfast", emoji: "🍳" },
+
+  // ✅ Your new picks (Lunch is NOT the sandwich emoji)
+  { key: "lunch", label: "Lunch", emoji: "🌞" },
+  { key: "buffet", label: "Buffet", emoji: "🍽️" },
+
   { key: "beer", label: "Beer", emoji: "🍺" },
   { key: "cocktails", label: "Cocktails", emoji: "🍸" },
   { key: "coffee", label: "Coffee", emoji: "☕" },
@@ -436,6 +444,32 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "bacon",
     "bagel",
   ],
+
+  // ✅ Added
+  lunch: [
+    "lunch",
+    "lunch special",
+    "lunch specials",
+    "power lunch",
+    "midday",
+    "noon",
+    "11am",
+    "12pm",
+    "1pm",
+    "2pm",
+  ],
+  buffet: [
+    "buffet",
+    "brunch buffet",
+    "breakfast buffet",
+    "lunch buffet",
+    "dinner buffet",
+    "all you can eat",
+    "all-you-can-eat",
+    "ayce",
+    "unlimited",
+  ],
+
   beer: [
     "beer",
     "draft",
@@ -616,7 +650,9 @@ function isApprovedStatus(status: any): boolean {
   // Treat NULL as approved so legacy rows don't disappear
   if (status == null) return true;
   const s = normLower(status);
-  return s === "approved" || s === "approve" || s === "live" || s === "published";
+  return (
+    s === "approved" || s === "approve" || s === "live" || s === "published"
+  );
 }
 
 function isFlashType(t: any): boolean {
@@ -1837,8 +1873,7 @@ export default function App() {
                 </span>
               ) : null}
               {dbStatus === "ok" ? (
-                <span style={{ marginLeft: 10, opacity: 0.85 }}>
-                </span>
+                <span style={{ marginLeft: 10, opacity: 0.85 }}></span>
               ) : null}
             </div>
           </div>
@@ -2598,3 +2633,4 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 10,
   },
 };
+```
