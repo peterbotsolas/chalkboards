@@ -1,4 +1,3 @@
-```tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -147,6 +146,10 @@ function formatHHMMTo12(hhmm: string): string {
   return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+/**
+ * ✅ FIX: no template strings/backticks here.
+ * This avoids the Vercel/esbuild "$" parse error you saw.
+ */
 function prettyWindow(start: string, end: string): string {
   const s = String(start || "").trim();
   const e = String(end || "").trim();
@@ -156,7 +159,7 @@ function prettyWindow(start: string, end: string): string {
     (s === "00:00" && e === "00:00");
 
   if (allDay) return "All day";
-  return `${formatHHMMTo12(s)} – ${formatHHMMTo12(e)}`;
+  return formatHHMMTo12(s) + " – " + formatHHMMTo12(e);
 }
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -198,9 +201,10 @@ async function geocodeAddress(
 }
 
 function mapsUrlFromAddress(address: string): string {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    address
-  )}`;
+  return (
+    "https://www.google.com/maps/search/?api=1&query=" +
+    encodeURIComponent(address)
+  );
 }
 
 function isFlashActiveNow(f: FlashSpecial): boolean {
@@ -250,23 +254,28 @@ function makeReportMailto(params: {
   description?: string;
   kind: "flash" | "weekly";
 }) {
-  const subject = `Chalkboards Report Issue — ${params.businessName}`;
+  const subject = "Chalkboards Report Issue — " + params.businessName;
   const bodyLines = [
     "Report issue:",
     "",
-    `Business: ${params.businessName}`,
-    `Address: ${params.address}`,
-    `Type: ${params.kind}`,
-    params.description ? `Special: ${params.description}` : "",
+    "Business: " + params.businessName,
+    "Address: " + params.address,
+    "Type: " + params.kind,
+    params.description ? "Special: " + params.description : "",
     "",
     "What’s wrong? (tell us):",
     "",
   ].filter(Boolean);
 
   const body = bodyLines.join("\n");
-  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(
-    subject
-  )}&body=${encodeURIComponent(body)}`;
+  return (
+    "mailto:" +
+    SUPPORT_EMAIL +
+    "?subject=" +
+    encodeURIComponent(subject) +
+    "&body=" +
+    encodeURIComponent(body)
+  );
 }
 
 /** =========================
@@ -308,11 +317,8 @@ const CATEGORIES: Array<{ key: CategoryKey; label: string; emoji: string }> = [
   { key: "med", label: "Mediterranean", emoji: "🥙" },
   { key: "sandwiches", label: "Sandwiches", emoji: "🥪" },
   { key: "breakfast", label: "Breakfast", emoji: "🍳" },
-
-  // ✅ Your new picks (Lunch is NOT the sandwich emoji)
   { key: "lunch", label: "Lunch", emoji: "🌞" },
   { key: "buffet", label: "Buffet", emoji: "🍽️" },
-
   { key: "beer", label: "Beer", emoji: "🍺" },
   { key: "cocktails", label: "Cocktails", emoji: "🍸" },
   { key: "coffee", label: "Coffee", emoji: "☕" },
@@ -444,8 +450,6 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "bacon",
     "bagel",
   ],
-
-  // ✅ Added
   lunch: [
     "lunch",
     "lunch special",
@@ -469,7 +473,6 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "ayce",
     "unlimited",
   ],
-
   beer: [
     "beer",
     "draft",
@@ -561,11 +564,11 @@ function time12To24(t: Time12): string {
   } else {
     if (h !== 12) h = h + 12;
   }
-  return `${pad2(h)}:${t.minute}`;
+  return pad2(h) + ":" + t.minute;
 }
 
 function prettyTime12(t: Time12): string {
-  return `${t.hour}:${t.minute} ${t.ampm}`;
+  return String(t.hour) + ":" + t.minute + " " + t.ampm;
 }
 
 function TimePicker12({
@@ -751,15 +754,15 @@ function rowsToFlash(rows: DbSpecialRow[]): FlashSpecial[] {
     if (!Number.isFinite(createdAt) || !Number.isFinite(expiresAt)) continue;
 
     const fullAddress = r.address;
-    const { street, city, state, zip } = splitAddress(fullAddress);
+    const s = splitAddress(fullAddress);
 
     list.push({
       id: r.id,
       businessName: r.business_name,
-      street,
-      city,
-      state,
-      zip,
+      street: s.street,
+      city: s.city,
+      state: s.state,
+      zip: s.zip,
       fullAddress,
       lat: r.lat,
       lng: r.lng,
@@ -776,7 +779,7 @@ function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
   const list: WeeklySpecial[] = [];
   for (const r of rows) {
     if (!isWeeklyType(r.type)) continue;
-    if (!isApprovedStatus(r.status)) continue; // approved items show
+    if (!isApprovedStatus(r.status)) continue;
     if (!r.address || !r.business_name || !r.deal) continue;
     if (r.lat == null || r.lng == null) continue;
 
@@ -787,15 +790,15 @@ function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
     if (!Number.isFinite(createdAt)) continue;
 
     const fullAddress = r.address;
-    const { street, city, state, zip } = splitAddress(fullAddress);
+    const s = splitAddress(fullAddress);
 
     list.push({
       id: r.id,
       businessName: r.business_name,
-      street,
-      city,
-      state,
-      zip,
+      street: s.street,
+      city: s.city,
+      state: s.state,
+      zip: s.zip,
       fullAddress,
       lat: r.lat,
       lng: r.lng,
@@ -861,7 +864,7 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
   const hasActive = hasFlash || group.hasActiveRegular;
 
   const distanceText =
-    group.distance >= 999999 ? "" : `${group.distance.toFixed(1)} mi`;
+    group.distance >= 999999 ? "" : String(group.distance.toFixed(1)) + " mi";
   const flashSoonest = hasFlash ? group.flashItems[0] : null;
 
   const reportHref = makeReportMailto({
@@ -891,7 +894,7 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
       {group.flashItems.length > 0 && (
         <div style={{ marginTop: 10 }}>
           {group.flashItems.slice(0, 2).map((f, idx) => (
-            <div key={`f-${idx}`} style={styles.cardText}>
+            <div key={"f-" + idx} style={styles.cardText}>
               {ICON_FLASH} {f.description}
             </div>
           ))}
@@ -906,7 +909,7 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
       {group.regularItems.length > 0 && (
         <div style={{ marginTop: group.flashItems.length > 0 ? 12 : 8 }}>
           {group.regularItems.slice(0, 2).map((r, idx) => (
-            <div key={`r-${idx}`} style={styles.cardText}>
+            <div key={"r-" + idx} style={styles.cardText}>
               {statusIcon(r.status)} {r.description}
               <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
                 {prettyWindow(r.start, r.end)}
@@ -967,7 +970,6 @@ export default function App() {
   const showLaterToday = feedMode === "upcoming";
 
   const [radius, setRadius] = useState(10);
-
   const [userLocation, setUserLocation] = useState({ lat: 40.88, lng: -74.07 });
   const [searchTerm, setSearchTerm] = useState("");
   const [category, setCategory] = useState<CategoryKey>("all");
@@ -976,10 +978,6 @@ export default function App() {
     "idle"
   );
   const [dbErrorText, setDbErrorText] = useState<string>("");
-  const [dbCounts, setDbCounts] = useState<{ flash: number; weekly: number }>({
-    flash: 0,
-    weekly: 0,
-  });
 
   useEffect(() => {
     ensureFontsLoaded();
@@ -1062,19 +1060,16 @@ export default function App() {
       if (cancelled) return;
 
       if (error) {
-        // eslint-disable-next-line no-console
         console.log("SUPABASE LOAD ERROR:", error);
         setDbStatus("error");
         setDbErrorText(error.message || "Unknown Supabase error");
         setFlashSpecials([]);
         setWeeklySpecials([]);
-        setDbCounts({ flash: 0, weekly: 0 });
         return;
       }
 
       const rows = (data ?? []) as DbSpecialRow[];
 
-      // IMPORTANT: never let weekly parsing kill flash
       let nextFlash: FlashSpecial[] = [];
       let nextWeekly: WeeklySpecial[] = [];
       try {
@@ -1092,7 +1087,6 @@ export default function App() {
 
       setFlashSpecials(nextFlash);
       setWeeklySpecials(nextWeekly);
-      setDbCounts({ flash: nextFlash.length, weekly: nextWeekly.length });
       setDbStatus("ok");
     }
 
@@ -1460,10 +1454,12 @@ export default function App() {
         lat: row.lat,
         lng: row.lng,
         regularLines: [
-          `${statusIcon(row.status)} ${row.description} (${prettyWindow(
-            row.start,
-            row.end
-          )})`,
+          statusIcon(row.status) +
+            " " +
+            row.description +
+            " (" +
+            prettyWindow(row.start, row.end) +
+            ")",
         ],
       });
     });
@@ -1476,7 +1472,7 @@ export default function App() {
         address: f.fullAddress,
         lat: f.lat,
         lng: f.lng,
-        flashLines: [`${ICON_FLASH} ${f.description}`],
+        flashLines: [ICON_FLASH + " " + f.description],
       });
     });
 
@@ -1495,36 +1491,44 @@ export default function App() {
 
       const flashHtml =
         flashLines.length > 0
-          ? `<div style="margin-top:8px;">
-              <div><b>Flash</b></div>
-              ${flashLines
-                .slice(0, 3)
-                .map((x) => `<div>${esc(x)}</div>`)
-                .join("")}
-            </div>`
+          ? '<div style="margin-top:8px;">' +
+            "<div><b>Flash</b></div>" +
+            flashLines
+              .slice(0, 3)
+              .map((x) => "<div>" + esc(x) + "</div>")
+              .join("") +
+            "</div>"
           : "";
 
       const regularHtml =
         regularLines.length > 0
-          ? `<div style="margin-top:8px;">
-              <div><b>Today</b></div>
-              ${regularLines
-                .slice(0, 3)
-                .map((x) => `<div>${esc(x)}</div>`)
-                .join("")}
-            </div>`
+          ? '<div style="margin-top:8px;">' +
+            "<div><b>Today</b></div>" +
+            regularLines
+              .slice(0, 3)
+              .map((x) => "<div>" + esc(x) + "</div>")
+              .join("") +
+            "</div>"
           : "";
 
-      const linksHtml = `<div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
-          <a href="${mapsUrlFromAddress(
-            b.address
-          )}" target="_blank" rel="noopener noreferrer">Open in Maps</a>
-          <a href="${reportHref}">Report issue</a>
-        </div>`;
+      const linksHtml =
+        '<div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">' +
+        '<a href="' +
+        mapsUrlFromAddress(b.address) +
+        '" target="_blank" rel="noopener noreferrer">Open in Maps</a>' +
+        '<a href="' +
+        reportHref +
+        '">Report issue</a>' +
+        "</div>";
 
-      const popupHtml = `<b>${esc(b.businessName || "Business")}</b><br>${esc(
-        b.address
-      )}${flashHtml}${regularHtml}${linksHtml}`;
+      const popupHtml =
+        "<b>" +
+        esc(b.businessName || "Business") +
+        "</b><br>" +
+        esc(b.address) +
+        flashHtml +
+        regularHtml +
+        linksHtml;
 
       const marker = L.marker([b.lat, b.lng], { icon: wingIcon })
         .addTo(mapRef.current!)
@@ -1587,7 +1591,7 @@ export default function App() {
       return;
     }
 
-    const fullAddress = `${street}, ${city}, ${state} ${zip}`;
+    const fullAddress = street + ", " + city + ", " + state + " " + zip;
 
     setFlashPosting(true);
     const coords = await geocodeAddress(fullAddress);
@@ -1689,7 +1693,7 @@ export default function App() {
       return;
     }
 
-    const fullAddress = `${street}, ${city}, ${state} ${zip}`;
+    const fullAddress = street + ", " + city + ", " + state + " " + zip;
 
     setWeeklyPosting(true);
     const coords = await geocodeAddress(fullAddress);
@@ -1824,6 +1828,16 @@ export default function App() {
     </div>
   );
 
+  const radiusLabel = radius === 999 ? "Anywhere" : String(radius) + " mi";
+  const categoryLabel =
+    category === "all"
+      ? "All categories"
+      : CATEGORIES.find((c) => c.key === category)?.label || "All categories";
+  const feedLabel =
+    feedMode === "now"
+      ? ICON_NOW + " Happening Now"
+      : ICON_UPCOMING + " Upcoming";
+
   return (
     <div style={styles.page}>
       {/* HEADER */}
@@ -1871,9 +1885,6 @@ export default function App() {
                 <span style={{ marginLeft: 10, opacity: 0.85 }}>
                   ({dbErrorText})
                 </span>
-              ) : null}
-              {dbStatus === "ok" ? (
-                <span style={{ marginLeft: 10, opacity: 0.85 }}></span>
               ) : null}
             </div>
           </div>
@@ -2246,21 +2257,11 @@ export default function App() {
         <div style={styles.sectionHeaderRow}>
           <div style={styles.sectionTitle}>Top 5 Near You</div>
           <div style={styles.sectionMeta}>
-            <span style={{ opacity: 0.9 }}>
-              {radius === 999 ? "Anywhere" : `${radius} mi`}
-            </span>
+            <span style={{ opacity: 0.9 }}>{radiusLabel}</span>
             <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
-            <span style={{ opacity: 0.85 }}>
-              {category === "all"
-                ? "All categories"
-                : CATEGORIES.find((c) => c.key === category)?.label}
-            </span>
+            <span style={{ opacity: 0.85 }}>{categoryLabel}</span>
             <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
-            <span style={{ opacity: 0.9 }}>
-              {feedMode === "now"
-                ? `${ICON_NOW} Happening Now`
-                : `${ICON_UPCOMING} Upcoming`}
-            </span>
+            <span style={{ opacity: 0.9 }}>{feedLabel}</span>
             {searchTerm.trim() ? (
               <>
                 <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
@@ -2289,7 +2290,7 @@ export default function App() {
       <div style={styles.footer}>
         Closest deals show first (within your chosen distance). • Support:{" "}
         <a
-          href={`mailto:${SUPPORT_EMAIL}`}
+          href={"mailto:" + SUPPORT_EMAIL}
           style={{ color: "#f2f2f2", textDecoration: "underline" }}
         >
           {SUPPORT_EMAIL}
@@ -2633,4 +2634,3 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 10,
   },
 };
-```
