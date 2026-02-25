@@ -149,7 +149,6 @@ function formatHHMMTo12(hhmm: string): string {
 
 /**
  * ✅ FIX: no template strings/backticks here.
- * This avoids the Vercel/esbuild "$" parse error you saw.
  */
 function prettyWindow(start: string, end: string): string {
   const s = String(start || "").trim();
@@ -862,17 +861,16 @@ type GroupedFeed = {
 
 function GroupedCard({
   group,
-  featured,
+  isFeatured,
 }: {
   group: GroupedFeed;
-  featured?: boolean;
+  isFeatured: boolean;
 }) {
   const hasFlash = group.flashItems.length > 0;
   const hasActive = hasFlash || group.hasActiveRegular;
 
   const distanceText =
     group.distance >= 999999 ? "" : String(group.distance.toFixed(1)) + " mi";
-  const flashSoonest = hasFlash ? group.flashItems[0] : null;
 
   const reportHref = makeReportMailto({
     businessName: group.businessName || "Business",
@@ -882,9 +880,7 @@ function GroupedCard({
     kind: group.flashItems.length > 0 ? "flash" : "weekly",
   });
 
-  const cardStyle: React.CSSProperties = featured
-    ? { ...styles.card, ...styles.cardFeatured }
-    : styles.card;
+  const cardStyle = isFeatured ? styles.cardFeatured : styles.card;
 
   return (
     <div style={cardStyle}>
@@ -902,38 +898,40 @@ function GroupedCard({
         </div>
       </div>
 
-      {/* ✅ SHOW ALL FLASH SPECIALS FOR THIS RESTAURANT */}
+      {/* ALL FLASH (no truncation) */}
       {group.flashItems.length > 0 && (
         <div style={{ marginTop: 10 }}>
           <div style={styles.cardSectionLabel}>Flash</div>
-          {group.flashItems.map((f, idx) => (
-            <div key={"f-" + idx} style={styles.cardText}>
-              {ICON_FLASH} {f.description}
-              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
-                expires in {f.expiresInMinutes} min
+          <div style={{ display: "grid", gap: 8 }}>
+            {group.flashItems.map((f, idx) => (
+              <div key={"f-" + idx} style={styles.cardText}>
+                {ICON_FLASH} {f.description}
+                <div style={{ fontSize: 12, opacity: 0.82, marginTop: 2 }}>
+                  expires in {f.expiresInMinutes} min
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
-      {/* ✅ SHOW ALL REGULAR (TODAY) SPECIALS FOR THIS RESTAURANT */}
+      {/* ALL REGULAR (no truncation) */}
       {group.regularItems.length > 0 && (
-        <div style={{ marginTop: group.flashItems.length > 0 ? 12 : 8 }}>
+        <div style={{ marginTop: group.flashItems.length > 0 ? 12 : 10 }}>
           <div style={styles.cardSectionLabel}>Today</div>
-          {group.regularItems.map((r, idx) => (
-            <div key={"r-" + idx} style={styles.cardText}>
-              {statusIcon(r.status)} {r.description}
-              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
-                {prettyWindow(r.start, r.end)}
-                {r.status === "later" && typeof r.startsInMinutes === "number" ? (
-                  <span style={{ marginLeft: 8, opacity: 0.9 }}>
-                    • starts in {r.startsInMinutes} min
-                  </span>
-                ) : null}
+          <div style={{ display: "grid", gap: 10 }}>
+            {group.regularItems.map((r, idx) => (
+              <div key={"r-" + idx} style={styles.cardText}>
+                {statusIcon(r.status)} {r.description}
+                <div style={{ fontSize: 12, opacity: 0.82, marginTop: 2 }}>
+                  {prettyWindow(r.start, r.end)}
+                  {typeof r.startsInMinutes === "number" && r.status === "later"
+                    ? " • starts in " + r.startsInMinutes + " min"
+                    : ""}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
@@ -955,8 +953,8 @@ function GroupedCard({
       <div style={styles.cardMeta}>
         <div style={{ maxWidth: "70%" }}>{group.address}</div>
         <div>
-          {flashSoonest ? (
-            <span>expires in {flashSoonest.expiresInMinutes} min</span>
+          {group.flashItems.length > 0 ? (
+            <span>flash active</span>
           ) : group.regularItems.length > 0 ? (
             <span>
               {prettyWindow(
@@ -992,9 +990,18 @@ export default function App() {
   );
   const [dbErrorText, setDbErrorText] = useState<string>("");
 
+  // Pagination: show 10 restaurant cards at a time
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
+
   useEffect(() => {
     ensureFontsLoaded();
   }, []);
+
+  // Reset pagination whenever discovery inputs change
+  useEffect(() => {
+    setPage(1);
+  }, [radius, searchTerm, category, feedMode, userLocation.lat, userLocation.lng]);
 
   // Try to set user location on load (silent)
   useEffect(() => {
@@ -1233,8 +1240,8 @@ export default function App() {
         matchesCategory(category, r.description, r.businessName, r.address)
       );
 
+    // KEEP: within a restaurant, active first then earlier start
     filtered.sort((a, b) => {
-      // keep within-card ordering nice, but not used for overall restaurant order
       if (a.status !== b.status) return a.status === "active" ? -1 : 1;
       const aDist = a.distance ?? 999999;
       const bDist = b.distance ?? 999999;
@@ -1276,9 +1283,8 @@ export default function App() {
   }, [flashSpecials, timeTick, userLocation, radius, searchTerm, category]);
 
   /** =========================
-   *  GROUPED FEED (ALL RESTAURANTS)
-   *  - sorted strictly by distance (true discovery)
-   * ========================= */
+   *  GROUPED FEED (DISTANCE-FIRST DISCOVERY)
+   *  ========================= */
   const groupedAllFeed = useMemo((): GroupedFeed[] => {
     const map = new Map<string, GroupedFeed>();
 
@@ -1346,61 +1352,44 @@ export default function App() {
     });
 
     map.forEach((g) => {
+      // Within a restaurant: flash soonest expiry first; regular active-first then time
       g.flashItems.sort((a, b) => a.expiresInMinutes - b.expiresInMinutes);
       g.regularItems.sort((a, b) => {
         if (a.status !== b.status) return a.status === "active" ? -1 : 1;
         return toMinutes(a.start) - toMinutes(b.start);
       });
 
-      // normalize display address/name
+      // Prefer consistent identity fields
       if (g.regularItems.length > 0) {
         g.address = g.regularItems[0].address;
         g.businessName = g.regularItems[0].businessName;
-      }
-      if (g.flashItems.length > 0 && (!g.address || !g.businessName)) {
+      } else if (g.flashItems.length > 0) {
         g.address = g.flashItems[0].address;
         g.businessName = g.flashItems[0].businessName;
       }
     });
 
-    const list = Array.from(map.values());
-    // ✅ TRUE DISCOVERY: distance only
+    // ✅ DISCOVERY SORT: distance ONLY (true discover)
+    const list = Array.from(map.values()).filter((g) => g.distance <= 999999);
     list.sort((a, b) => a.distance - b.distance);
     return list;
   }, [visibleTodayRows, activeFlashInRadiusSorted, timeTick]);
 
-  /** =========================
-   *  TOP 5 (auto-featured) + PAGED LIST
-   * ========================= */
-  const featuredTop5 = useMemo(() => groupedAllFeed.slice(0, 5), [groupedAllFeed]);
+  const groupedTop5ByDistance = useMemo(() => {
+    return groupedAllFeed.slice(0, 5);
+  }, [groupedAllFeed]);
 
   const featuredKeySet = useMemo(() => {
-    const s = new Set<string>();
-    featuredTop5.forEach((g) => s.add(g.key));
-    return s;
-  }, [featuredTop5]);
+    const set = new Set<string>();
+    groupedTop5ByDistance.forEach((g) => set.add(g.key));
+    return set;
+  }, [groupedTop5ByDistance]);
 
-  const remainderFeed = useMemo(() => groupedAllFeed.slice(5), [groupedAllFeed]);
+  const visiblePaged = useMemo(() => {
+    return groupedAllFeed.slice(0, page * PAGE_SIZE);
+  }, [groupedAllFeed, page]);
 
-  // show 10 restaurant cards at a time (after Top 5)
-  const [visibleRestaurantCount, setVisibleRestaurantCount] = useState(10);
-
-  // reset paging when filters/location change
-  useEffect(() => {
-    setVisibleRestaurantCount(10);
-  }, [
-    radius,
-    searchTerm,
-    category,
-    feedMode,
-    userLocation.lat,
-    userLocation.lng,
-    timeTick,
-  ]);
-
-  const pagedRemainder = useMemo(() => {
-    return remainderFeed.slice(0, visibleRestaurantCount);
-  }, [remainderFeed, visibleRestaurantCount]);
+  const hasMore = visiblePaged.length < groupedAllFeed.length;
 
   /** =========================
    *  MAP INIT (once)
@@ -1889,8 +1878,6 @@ export default function App() {
       ? ICON_NOW + " Happening Now"
       : ICON_UPCOMING + " Upcoming";
 
-  const canLoadMore = visibleRestaurantCount < remainderFeed.length;
-
   return (
     <div style={styles.page}>
       {/* HEADER */}
@@ -2305,7 +2292,7 @@ export default function App() {
       {/* MAP */}
       <div ref={mapContainerRef} className="cb-map" style={styles.map} />
 
-      {/* TOP 5 (AUTO FEATURED) */}
+      {/* TOP 5 (by distance) */}
       <div style={styles.section}>
         <div style={styles.sectionHeaderRow}>
           <div style={styles.sectionTitle}>Top 5 Near You</div>
@@ -2326,7 +2313,7 @@ export default function App() {
           </div>
         </div>
 
-        {featuredTop5.length === 0 ? (
+        {groupedTop5ByDistance.length === 0 ? (
           <div style={styles.card}>
             <div style={styles.cardTitle}>No nearby specials right now</div>
             <div style={styles.cardText}>
@@ -2336,53 +2323,39 @@ export default function App() {
             </div>
           </div>
         ) : (
-          featuredTop5.map((g) => (
-            <GroupedCard key={g.key} group={g} featured={true} />
+          groupedTop5ByDistance.map((g) => (
+            <GroupedCard key={g.key} group={g} isFeatured={true} />
           ))
         )}
       </div>
 
-      {/* ALL RESTAURANTS (PAGED 10 AT A TIME, CONTINUING BY DISTANCE) */}
+      {/* ALL (10 at a time, More loads next 10, still sorted by distance) */}
       <div style={styles.section}>
         <div style={styles.sectionHeaderRow}>
-          <div style={styles.sectionTitle}>All Nearby</div>
+          <div style={styles.sectionTitle}>All Nearby (distance-first)</div>
           <div style={styles.sectionMeta}>
-            Sorted by distance • Showing{" "}
-            <b>
-              {pagedRemainder.length} of {remainderFeed.length}
-            </b>{" "}
-            after Top 5
+            Showing <b>{Math.min(visiblePaged.length, groupedAllFeed.length)}</b>{" "}
+            of <b>{groupedAllFeed.length}</b> restaurants
           </div>
         </div>
 
-        {pagedRemainder.length === 0 ? (
-          <div style={styles.card}>
-            <div style={styles.cardTitle}>Nothing else in range</div>
-            <div style={styles.cardText}>
-              {searchTerm.trim()
-                ? "Clear search or widen distance."
-                : "Try increasing distance."}
-            </div>
-          </div>
-        ) : (
+        {groupedAllFeed.length === 0 ? null : (
           <>
-            {pagedRemainder.map((g) => (
+            {visiblePaged.map((g) => (
               <GroupedCard
-                key={g.key}
+                key={"all-" + g.key}
                 group={g}
-                featured={featuredKeySet.has(g.key)}
+                isFeatured={featuredKeySet.has(g.key)}
               />
             ))}
 
-            {canLoadMore && (
+            {hasMore && (
               <div style={{ display: "flex", justifyContent: "center" }}>
                 <button
-                  onClick={() => setVisibleRestaurantCount((n) => n + 10)}
-                  style={buttonStyle("more", "secondary")}
-                  onMouseEnter={() => setHovered("more")}
-                  onMouseLeave={() => setHovered(null)}
+                  onClick={() => setPage((p) => p + 1)}
+                  style={styles.moreButton}
                 >
-                  More (load next 10)
+                  More (load next {PAGE_SIZE})
                 </button>
               </div>
             )}
@@ -2391,8 +2364,9 @@ export default function App() {
       </div>
 
       <div style={styles.footer}>
-        Closest deals show first (within your chosen distance). • Auto-featured
-        Top 5 are highlighted (future monetization hook). • Support:{" "}
+        Closest places show first (true distance order). • Top 5 are outlined in{" "}
+        <span style={{ color: "#00FF00", fontWeight: 900 }}>LIVE green</span>. •
+        Support:{" "}
         <a
           href={"mailto:" + SUPPORT_EMAIL}
           style={{ color: "#f2f2f2", textDecoration: "underline" }}
@@ -2642,11 +2616,16 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 10px 26px rgba(0,0,0,0.30)",
   },
 
-  // ✅ Top 5 featured outline uses the same LIVE green
+  // ✅ Featured cards: LIVE-green outline so “Top 5” can be monetized later
   cardFeatured: {
+    padding: 14,
+    borderRadius: 18,
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
     border: "2px solid rgba(0, 255, 0, 0.55)",
     boxShadow:
-      "0 10px 26px rgba(0,0,0,0.30), 0 0 0 3px rgba(0, 255, 0, 0.10)",
+      "0 10px 26px rgba(0,0,0,0.30), 0 0 0 1px rgba(0,255,0,0.10) inset",
+    marginBottom: 10,
   },
 
   cardTop: {
@@ -2663,11 +2642,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 900,
     letterSpacing: 0.9,
     textTransform: "uppercase",
-    opacity: 0.85,
+    opacity: 0.78,
     marginBottom: 6,
   },
 
-  cardText: { marginTop: 6, fontSize: 14.5, lineHeight: 1.45, opacity: 0.98 },
+  cardText: { marginTop: 0, fontSize: 14.5, lineHeight: 1.45, opacity: 0.98 },
   cardMeta: {
     marginTop: 12,
     fontSize: 12,
@@ -2732,6 +2711,19 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.2,
     fontSize: 13,
     opacity: 0.95,
+  },
+
+  moreButton: {
+    marginTop: 6,
+    padding: "10px 14px",
+    borderRadius: 14,
+    cursor: "pointer",
+    fontWeight: 900,
+    letterSpacing: 0.2,
+    color: "#f2f2f2",
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    boxShadow: "0 10px 26px rgba(0,0,0,0.25)",
   },
 
   footer: { marginTop: 16, opacity: 0.72, fontSize: 12, lineHeight: 1.4 },
