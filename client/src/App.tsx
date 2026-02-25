@@ -1987,10 +1987,6 @@ export default function App() {
       <div style={styles.section}>
         <div style={styles.sectionHeaderRow}>
           <div style={styles.sectionTitle}>All Nearby</div>
-          <div style={styles.sectionMeta}>
-            Showing <b>{visibleFullFeed.length}</b> /{" "}
-            <b>{groupedAllExceptTop.length}</b>
-          </div>
         </div>
 
         {visibleFullFeed.map((g) => (
@@ -2006,9 +2002,7 @@ export default function App() {
         {visibleFullFeed.length < groupedAllExceptTop.length && (
           <button
             onClick={() =>
-              setPageSize((n) =>
-                Math.min(groupedAllExceptTop.length, n + 10)
-              )
+              setPageSize((n) => Math.min(groupedAllExceptTop.length, n + 10))
             }
             style={styles.loadMoreBtn}
           >
@@ -2016,7 +2010,6 @@ export default function App() {
           </button>
         )}
       </div>
-
       <div style={styles.footer}>
         Sorted by distance (closest first). Support:{" "}
         <a
