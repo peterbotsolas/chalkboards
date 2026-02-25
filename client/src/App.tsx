@@ -1,3 +1,4 @@
+```tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -859,7 +860,13 @@ type GroupedFeed = {
   flashItems: FlashFeedItem[];
 };
 
-function GroupedCard({ group }: { group: GroupedFeed }) {
+function GroupedCard({
+  group,
+  featured,
+}: {
+  group: GroupedFeed;
+  featured?: boolean;
+}) {
   const hasFlash = group.flashItems.length > 0;
   const hasActive = hasFlash || group.hasActiveRegular;
 
@@ -875,8 +882,12 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
     kind: group.flashItems.length > 0 ? "flash" : "weekly",
   });
 
+  const cardStyle: React.CSSProperties = featured
+    ? { ...styles.card, ...styles.cardFeatured }
+    : styles.card;
+
   return (
-    <div style={styles.card}>
+    <div style={cardStyle}>
       <div style={styles.cardTop}>
         <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
           <div style={styles.cardTitle}>{group.businessName}</div>
@@ -891,36 +902,38 @@ function GroupedCard({ group }: { group: GroupedFeed }) {
         </div>
       </div>
 
+      {/* ✅ SHOW ALL FLASH SPECIALS FOR THIS RESTAURANT */}
       {group.flashItems.length > 0 && (
         <div style={{ marginTop: 10 }}>
-          {group.flashItems.slice(0, 2).map((f, idx) => (
+          <div style={styles.cardSectionLabel}>Flash</div>
+          {group.flashItems.map((f, idx) => (
             <div key={"f-" + idx} style={styles.cardText}>
               {ICON_FLASH} {f.description}
+              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
+                expires in {f.expiresInMinutes} min
+              </div>
             </div>
           ))}
-          {group.flashItems.length > 2 && (
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
-              + {group.flashItems.length - 2} more flash
-            </div>
-          )}
         </div>
       )}
 
+      {/* ✅ SHOW ALL REGULAR (TODAY) SPECIALS FOR THIS RESTAURANT */}
       {group.regularItems.length > 0 && (
         <div style={{ marginTop: group.flashItems.length > 0 ? 12 : 8 }}>
-          {group.regularItems.slice(0, 2).map((r, idx) => (
+          <div style={styles.cardSectionLabel}>Today</div>
+          {group.regularItems.map((r, idx) => (
             <div key={"r-" + idx} style={styles.cardText}>
               {statusIcon(r.status)} {r.description}
               <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
                 {prettyWindow(r.start, r.end)}
+                {r.status === "later" && typeof r.startsInMinutes === "number" ? (
+                  <span style={{ marginLeft: 8, opacity: 0.9 }}>
+                    • starts in {r.startsInMinutes} min
+                  </span>
+                ) : null}
               </div>
             </div>
           ))}
-          {group.regularItems.length > 2 && (
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
-              + {group.regularItems.length - 2} more specials
-            </div>
-          )}
         </div>
       )}
 
@@ -1221,6 +1234,7 @@ export default function App() {
       );
 
     filtered.sort((a, b) => {
+      // keep within-card ordering nice, but not used for overall restaurant order
       if (a.status !== b.status) return a.status === "active" ? -1 : 1;
       const aDist = a.distance ?? 999999;
       const bDist = b.distance ?? 999999;
@@ -1261,7 +1275,11 @@ export default function App() {
       .sort((a, b) => a.distance - b.distance);
   }, [flashSpecials, timeTick, userLocation, radius, searchTerm, category]);
 
-  const groupedTopFeed = useMemo((): GroupedFeed[] => {
+  /** =========================
+   *  GROUPED FEED (ALL RESTAURANTS)
+   *  - sorted strictly by distance (true discovery)
+   * ========================= */
+  const groupedAllFeed = useMemo((): GroupedFeed[] => {
     const map = new Map<string, GroupedFeed>();
 
     const addGroupIfNeeded = (
@@ -1334,22 +1352,55 @@ export default function App() {
         return toMinutes(a.start) - toMinutes(b.start);
       });
 
+      // normalize display address/name
       if (g.regularItems.length > 0) {
         g.address = g.regularItems[0].address;
         g.businessName = g.regularItems[0].businessName;
       }
+      if (g.flashItems.length > 0 && (!g.address || !g.businessName)) {
+        g.address = g.flashItems[0].address;
+        g.businessName = g.flashItems[0].businessName;
+      }
     });
 
     const list = Array.from(map.values());
-    list.sort((a, b) => {
-      const aActive = a.flashItems.length > 0 || a.hasActiveRegular;
-      const bActive = b.flashItems.length > 0 || b.hasActiveRegular;
-      if (aActive !== bActive) return aActive ? -1 : 1;
-      return a.distance - b.distance;
-    });
-
-    return list.slice(0, 5);
+    // ✅ TRUE DISCOVERY: distance only
+    list.sort((a, b) => a.distance - b.distance);
+    return list;
   }, [visibleTodayRows, activeFlashInRadiusSorted, timeTick]);
+
+  /** =========================
+   *  TOP 5 (auto-featured) + PAGED LIST
+   * ========================= */
+  const featuredTop5 = useMemo(() => groupedAllFeed.slice(0, 5), [groupedAllFeed]);
+
+  const featuredKeySet = useMemo(() => {
+    const s = new Set<string>();
+    featuredTop5.forEach((g) => s.add(g.key));
+    return s;
+  }, [featuredTop5]);
+
+  const remainderFeed = useMemo(() => groupedAllFeed.slice(5), [groupedAllFeed]);
+
+  // show 10 restaurant cards at a time (after Top 5)
+  const [visibleRestaurantCount, setVisibleRestaurantCount] = useState(10);
+
+  // reset paging when filters/location change
+  useEffect(() => {
+    setVisibleRestaurantCount(10);
+  }, [
+    radius,
+    searchTerm,
+    category,
+    feedMode,
+    userLocation.lat,
+    userLocation.lng,
+    timeTick,
+  ]);
+
+  const pagedRemainder = useMemo(() => {
+    return remainderFeed.slice(0, visibleRestaurantCount);
+  }, [remainderFeed, visibleRestaurantCount]);
 
   /** =========================
    *  MAP INIT (once)
@@ -1494,7 +1545,7 @@ export default function App() {
           ? '<div style="margin-top:8px;">' +
             "<div><b>Flash</b></div>" +
             flashLines
-              .slice(0, 3)
+              .slice(0, 6)
               .map((x) => "<div>" + esc(x) + "</div>")
               .join("") +
             "</div>"
@@ -1505,7 +1556,7 @@ export default function App() {
           ? '<div style="margin-top:8px;">' +
             "<div><b>Today</b></div>" +
             regularLines
-              .slice(0, 3)
+              .slice(0, 6)
               .map((x) => "<div>" + esc(x) + "</div>")
               .join("") +
             "</div>"
@@ -1837,6 +1888,8 @@ export default function App() {
     feedMode === "now"
       ? ICON_NOW + " Happening Now"
       : ICON_UPCOMING + " Upcoming";
+
+  const canLoadMore = visibleRestaurantCount < remainderFeed.length;
 
   return (
     <div style={styles.page}>
@@ -2252,7 +2305,7 @@ export default function App() {
       {/* MAP */}
       <div ref={mapContainerRef} className="cb-map" style={styles.map} />
 
-      {/* TOP 5 */}
+      {/* TOP 5 (AUTO FEATURED) */}
       <div style={styles.section}>
         <div style={styles.sectionHeaderRow}>
           <div style={styles.sectionTitle}>Top 5 Near You</div>
@@ -2273,7 +2326,7 @@ export default function App() {
           </div>
         </div>
 
-        {groupedTopFeed.length === 0 ? (
+        {featuredTop5.length === 0 ? (
           <div style={styles.card}>
             <div style={styles.cardTitle}>No nearby specials right now</div>
             <div style={styles.cardText}>
@@ -2283,12 +2336,63 @@ export default function App() {
             </div>
           </div>
         ) : (
-          groupedTopFeed.map((g) => <GroupedCard key={g.key} group={g} />)
+          featuredTop5.map((g) => (
+            <GroupedCard key={g.key} group={g} featured={true} />
+          ))
+        )}
+      </div>
+
+      {/* ALL RESTAURANTS (PAGED 10 AT A TIME, CONTINUING BY DISTANCE) */}
+      <div style={styles.section}>
+        <div style={styles.sectionHeaderRow}>
+          <div style={styles.sectionTitle}>All Nearby</div>
+          <div style={styles.sectionMeta}>
+            Sorted by distance • Showing{" "}
+            <b>
+              {pagedRemainder.length} of {remainderFeed.length}
+            </b>{" "}
+            after Top 5
+          </div>
+        </div>
+
+        {pagedRemainder.length === 0 ? (
+          <div style={styles.card}>
+            <div style={styles.cardTitle}>Nothing else in range</div>
+            <div style={styles.cardText}>
+              {searchTerm.trim()
+                ? "Clear search or widen distance."
+                : "Try increasing distance."}
+            </div>
+          </div>
+        ) : (
+          <>
+            {pagedRemainder.map((g) => (
+              <GroupedCard
+                key={g.key}
+                group={g}
+                featured={featuredKeySet.has(g.key)}
+              />
+            ))}
+
+            {canLoadMore && (
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <button
+                  onClick={() => setVisibleRestaurantCount((n) => n + 10)}
+                  style={buttonStyle("more", "secondary")}
+                  onMouseEnter={() => setHovered("more")}
+                  onMouseLeave={() => setHovered(null)}
+                >
+                  More (load next 10)
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
       <div style={styles.footer}>
-        Closest deals show first (within your chosen distance). • Support:{" "}
+        Closest deals show first (within your chosen distance). • Auto-featured
+        Top 5 are highlighted (future monetization hook). • Support:{" "}
         <a
           href={"mailto:" + SUPPORT_EMAIL}
           style={{ color: "#f2f2f2", textDecoration: "underline" }}
@@ -2537,6 +2641,14 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 10,
     boxShadow: "0 10px 26px rgba(0,0,0,0.30)",
   },
+
+  // ✅ Top 5 featured outline uses the same LIVE green
+  cardFeatured: {
+    border: "2px solid rgba(0, 255, 0, 0.55)",
+    boxShadow:
+      "0 10px 26px rgba(0,0,0,0.30), 0 0 0 3px rgba(0, 255, 0, 0.10)",
+  },
+
   cardTop: {
     display: "flex",
     alignItems: "flex-start",
@@ -2545,6 +2657,16 @@ const styles: Record<string, React.CSSProperties> = {
   },
   cardTitle: { fontSize: 16, fontWeight: 850 },
   cardSubtle: { fontSize: 12, opacity: 0.75 },
+
+  cardSectionLabel: {
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 0.9,
+    textTransform: "uppercase",
+    opacity: 0.85,
+    marginBottom: 6,
+  },
+
   cardText: { marginTop: 6, fontSize: 14.5, lineHeight: 1.45, opacity: 0.98 },
   cardMeta: {
     marginTop: 12,
@@ -2634,3 +2756,4 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 10,
   },
 };
+```
