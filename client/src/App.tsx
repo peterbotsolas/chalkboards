@@ -1032,7 +1032,7 @@ export default function App() {
     const t = setInterval(() => {
       setTimeTick((x) => x + 1);
       setReloadTick((x) => x + 1);
-    }, 30000);
+    }, 240000);
     return () => clearInterval(t);
   }, []);
 
@@ -1619,7 +1619,7 @@ export default function App() {
             <div style={styles.title}>Chalkboards</div>
 
             <div style={styles.subtitle}>
-              Digital Chalkboards + Live Local Specials • <b>{today}</b> • {format12Hour(new Date())} •{" "}
+              Digital Restaurant Chalkboards + Live Local Specials • <b>{today}</b> • {format12Hour(new Date())} •{" "}
               {dbStatus === "ok" ? (
                 <span
                   onClick={() => setReloadTick((x) => x + 1)}
@@ -1682,9 +1682,6 @@ export default function App() {
         <div style={styles.pod}>
           <div style={styles.podTitle}>Filters</div>
           <div style={styles.podRow}>
-            <button onClick={() => setReloadTick((x) => x + 1)} style={styles.btnSecondary}>
-              Refresh
-            </button>
 
             <div style={styles.field}>
               <div style={styles.label}>Distance</div>
