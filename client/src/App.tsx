@@ -245,25 +245,28 @@ function nowMinutes() {
   return d.getHours() * 60 + d.getMinutes();
 }
 
-/** =========================
- *  APP
- *  ========================= */
 export default function App() {
-  const PAGE_SIZE = 10;
+  // What you asked for:
+  const INITIAL_TOTAL_CARDS = 10; // total visible cards on first load
+  const FEATURED_COUNT = 5; // top 5 inside those 10
+  const LOAD_MORE_STEP = 10; // each click adds 10 more
 
   const mapRef = useRef<L.Map | null>(null);
   const mapElRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
 
   const [showMap, setShowMap] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
 
   const [search, setSearch] = useState("");
   const [radius, setRadius] = useState(10);
 
-  // pagination is for "beyond top 5"
-  const [page, setPage] = useState(1);
+  // page = how many “extra 10s” beyond the initial 10
+  const [page, setPage] = useState(0);
+
+  const [reloadTick, setReloadTick] = useState(0);
 
   const [user, setUser] = useState({ lat: 40.88, lng: -74.07 });
   const [specials, setSpecials] = useState<Special[]>([]);
@@ -278,7 +281,7 @@ export default function App() {
     );
   }, []);
 
-  // load supabase
+  // load supabase (and refresh)
   useEffect(() => {
     let cancel = false;
 
@@ -290,7 +293,7 @@ export default function App() {
         .from("specials")
         .select("id, created_at, type, business_name, deal, address, expires_at, status, extra, lat, lng")
         .order("created_at", { ascending: false })
-        .limit(1200);
+        .limit(2000);
 
       if (cancel) return;
 
@@ -311,14 +314,13 @@ export default function App() {
       cancel = true;
       clearInterval(t);
     };
-  }, []);
+  }, [reloadTick]);
 
   // reset pagination when filters change
   useEffect(() => {
-    setPage(1);
+    setPage(0);
   }, [search, radius, user.lat, user.lng]);
 
-  // Build restaurant cards (ALL specials per address)
   const cards = useMemo((): RestaurantCard[] => {
     const q = search.trim().toLowerCase();
     const nowM = nowMinutes();
@@ -359,20 +361,14 @@ export default function App() {
           sub: "expires in " + mins + " min",
         });
       } else {
-        // weekly
         const startM = toMinutes(s.start || "00:00");
         const endMraw = toMinutes(s.end || "00:00");
         const crosses = endMraw <= startM;
-        const endM = crosses ? endMraw + 24 * 60 : endMraw;
 
-        // note: we DO NOT hide weekly specials — we show them all.
-        // We only add an ACTIVE tag for readability.
         const active = (() => {
-          const cur = nowM;
           if (!s.start || !s.end) return false;
-          if (!crosses) return cur >= startM && cur <= endM;
-          // overnight: treat as active if after start OR before end
-          return cur >= startM || cur <= endMraw;
+          if (!crosses) return nowM >= startM && nowM <= endMraw;
+          return nowM >= startM || nowM <= endMraw;
         })();
 
         g.specials.push({
@@ -386,10 +382,10 @@ export default function App() {
 
     const list = Array.from(map.values());
 
-    // Sort restaurants by distance = true discovery
+    // True discovery: restaurants sorted ONLY by distance
     list.sort((a, b) => a.distance - b.distance);
 
-    // Sort specials within a restaurant (flash first, then weekly by day/time)
+    // Specials inside each restaurant: flash first, then weekly by day/time-ish
     const dayRank: Record<string, number> = {
       Sunday: 0,
       Monday: 1,
@@ -404,15 +400,13 @@ export default function App() {
       c.specials.sort((a, b) => {
         if (a.kind !== b.kind) return a.kind === "flash" ? -1 : 1;
 
-        const aIsWeekly = a.kind === "weekly";
-        const bIsWeekly = b.kind === "weekly";
-
-        if (aIsWeekly && bIsWeekly) {
+        if (a.kind === "weekly" && b.kind === "weekly") {
           const aDay = a.label.replace("🗓️ WEEKLY • ", "");
           const bDay = b.label.replace("🗓️ WEEKLY • ", "");
           const ra = dayRank[aDay] ?? 99;
           const rb = dayRank[bDay] ?? 99;
           if (ra !== rb) return ra - rb;
+          return a.deal.localeCompare(b.deal);
         }
 
         return a.deal.localeCompare(b.deal);
@@ -422,14 +416,15 @@ export default function App() {
     return list;
   }, [specials, user.lat, user.lng, radius, search]);
 
-  // Top 5 gets featured outline and always shown
-  const top5 = useMemo(() => cards.slice(0, 5), [cards]);
-  const rest = useMemo(() => cards.slice(5), [cards]);
+  // Visible list: 10 total initially, then +10 each click
+  const visibleCount = useMemo(
+    () => Math.min(cards.length, INITIAL_TOTAL_CARDS + page * LOAD_MORE_STEP),
+    [cards.length, page]
+  );
 
-  // Pagination applies ONLY to the rest list
-  const visibleRest = useMemo(() => rest.slice(0, page * PAGE_SIZE), [rest, page]);
+  const visibleCards = useMemo(() => cards.slice(0, visibleCount), [cards, visibleCount]);
 
-  const hasMore = visibleRest.length < rest.length;
+  const hasMore = visibleCount < cards.length;
 
   // Map init (only when ON)
   useEffect(() => {
@@ -452,7 +447,7 @@ export default function App() {
     };
   }, [showMap, user.lat, user.lng]);
 
-  // Important: when map turns ON, Leaflet needs a resize kick
+  // Leaflet needs a resize kick when toggled on
   useEffect(() => {
     if (!showMap) return;
     const t = setTimeout(() => {
@@ -464,22 +459,18 @@ export default function App() {
     return () => clearTimeout(t);
   }, [showMap, user.lat, user.lng]);
 
-  // Map markers reflect top 5 + visible rest (the cards the user can see)
+  // Markers = visible cards (what user is currently seeing)
   useEffect(() => {
     if (!showMap) return;
     if (!mapRef.current) return;
 
-    const visible = [...top5, ...visibleRest];
-
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
-
-    mapRef.current.setView([user.lat, user.lng], 12);
 
     const userMarker = L.marker([user.lat, user.lng]).addTo(mapRef.current);
     markersRef.current.push(userMarker);
 
-    visible.forEach((c) => {
+    visibleCards.forEach((c) => {
       const html =
         "<b>" +
         c.businessName +
@@ -497,12 +488,10 @@ export default function App() {
       const m = L.marker([c.lat, c.lng]).addTo(mapRef.current!).bindPopup(html);
       markersRef.current.push(m);
     });
-  }, [showMap, top5, visibleRest, user.lat, user.lng]);
+  }, [showMap, visibleCards, user.lat, user.lng]);
 
-  const totalShown = top5.length + visibleRest.length;
-  const totalCards = cards.length;
-
-  const Card = ({ c, featured }: { c: RestaurantCard; featured: boolean }) => {
+  const Card = ({ c, idx }: { c: RestaurantCard; idx: number }) => {
+    const featured = idx < FEATURED_COUNT; // top 5 by distance
     const distText = c.distance >= 999999 ? "" : c.distance.toFixed(1) + " mi";
 
     return (
@@ -519,8 +508,8 @@ export default function App() {
         </div>
 
         <div style={styles.specials}>
-          {c.specials.map((s, idx) => (
-            <div key={c.key + "-" + idx} style={styles.specialRow}>
+          {c.specials.map((s, i) => (
+            <div key={c.key + "-" + i} style={styles.specialRow}>
               <div style={styles.specialLabel}>{s.label}</div>
               <div style={styles.specialDeal}>{s.deal}</div>
               <div style={styles.specialSub}>{s.sub}</div>
@@ -557,7 +546,14 @@ export default function App() {
           />
 
           <div style={styles.row}>
-            <button onClick={() => setPage(1)} style={styles.btn}>
+            <button
+              onClick={() => {
+                setPage(0);
+                setReloadTick((x) => x + 1);
+              }}
+              style={styles.btn}
+              title="Reload from database"
+            >
               Refresh
             </button>
 
@@ -578,7 +574,8 @@ export default function App() {
             </select>
 
             <div style={styles.countPill}>
-              Showing <b>{totalShown}</b> / {totalCards}
+              Featured <b>{Math.min(FEATURED_COUNT, cards.length)}</b> • Showing{" "}
+              <b>{visibleCount}</b> / {cards.length}
             </div>
           </div>
 
@@ -598,40 +595,22 @@ export default function App() {
       )}
 
       <div style={styles.list}>
-        {/* TOP 5 */}
-        <div style={styles.sectionHeader}>
-          <div style={styles.sectionTitle}>Top 5 Near You</div>
-          <div style={styles.sectionSub}>Featured purely by distance (for now).</div>
-        </div>
+        {cards.length === 0 && !loading ? (
+          <div style={styles.empty}>
+            No results in this radius. Try “Anywhere” or clear search.
+          </div>
+        ) : null}
 
-        {top5.length === 0 && !loading ? <div style={styles.empty}>No specials found in this radius.</div> : null}
-        {top5.map((c) => (
-          <Card key={c.key} c={c} featured={true} />
+        {visibleCards.map((c, idx) => (
+          <Card key={c.key} c={c} idx={idx} />
         ))}
 
-        {/* REST (PAGINATED 10 AT A TIME) */}
-        {rest.length > 0 ? (
-          <>
-            <div style={{ height: 6 }} />
-            <div style={styles.sectionHeader}>
-              <div style={styles.sectionTitle}>More Nearby</div>
-              <div style={styles.sectionSub}>
-                Still sorted by distance • Load 10 more at a time
-              </div>
-            </div>
-
-            {visibleRest.map((c) => (
-              <Card key={c.key} c={c} featured={false} />
-            ))}
-
-            {hasMore ? (
-              <button onClick={() => setPage((p) => p + 1)} style={styles.moreBtn}>
-                Load more (next {PAGE_SIZE})
-              </button>
-            ) : (
-              <div style={styles.endCap}>That’s everything in range.</div>
-            )}
-          </>
+        {hasMore ? (
+          <button onClick={() => setPage((p) => p + 1)} style={styles.moreBtn}>
+            Load more (next {LOAD_MORE_STEP})
+          </button>
+        ) : cards.length > 0 ? (
+          <div style={styles.endCap}>That’s everything in range.</div>
         ) : null}
 
         <div style={styles.footer}>Support: {SUPPORT_EMAIL}</div>
@@ -741,14 +720,6 @@ const styles: Record<string, React.CSSProperties> = {
     opacity: 0.9,
   },
   list: { padding: 16, display: "grid", gap: 12 },
-  sectionHeader: {
-    display: "grid",
-    gap: 4,
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  sectionTitle: { fontSize: 14, fontWeight: 900, letterSpacing: 0.2 },
-  sectionSub: { fontSize: 12, opacity: 0.78 },
 
   card: {
     padding: 14,
