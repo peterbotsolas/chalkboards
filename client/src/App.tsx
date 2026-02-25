@@ -1714,7 +1714,7 @@ export default function App() {
               )}
             </div>
 
-            <button onClick={handleLocateMe} style={styles.btnSecondary}>
+            <button onClick={handleLocateMe} style={styles.btnSmall}>
               Use My Location
             </button>
           </div>
@@ -1753,13 +1753,13 @@ export default function App() {
           <div style={styles.podRow}>
             <button
               onClick={() => setShowFlashForm((v) => !v)}
-              style={styles.btnPrimary}
+              style={styles.btnPrimarySmall}
             >
               {showFlashForm ? "Close Flash" : "Post Flash"}
             </button>
             <button
               onClick={() => setShowWeeklyForm((v) => !v)}
-              style={styles.btnSecondary}
+              style={styles.btnSmall}
             >
               {showWeeklyForm ? "Close Weekly" : "Post Weekly"}
             </button>
@@ -2264,7 +2264,34 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 10px 22px rgba(0,0,0,0.22)",
     transition: "transform 120ms ease, filter 120ms ease",
   },
-
+  btnSmall: {
+    padding: "8px 10px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.05)",
+    color: "#f2f2f2",
+    cursor: "pointer",
+    fontWeight: 800,
+    letterSpacing: 0.1,
+    boxShadow: "0 10px 22px rgba(0,0,0,0.18)",
+    transition: "transform 120ms ease, filter 120ms ease",
+    fontSize: 13,
+    lineHeight: 1.1,
+  },
+  btnPrimarySmall: {
+    padding: "8px 10px",
+    borderRadius: 12,
+    border: "1px solid rgba(0, 140, 255, 0.34)",
+    background: "rgba(0, 140, 255, 0.16)",
+    color: "#f2f2f2",
+    cursor: "pointer",
+    fontWeight: 800,
+    letterSpacing: 0.1,
+    boxShadow: "0 10px 22px rgba(0,0,0,0.18)",
+    transition: "transform 120ms ease, filter 120ms ease",
+    fontSize: 13,
+    lineHeight: 1.1,
+  },
   segmentWrap: {
     display: "flex",
     gap: 8,
