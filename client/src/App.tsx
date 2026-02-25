@@ -1,83 +1,213 @@
+```tsx
+// client/src/App.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { createClient } from "@supabase/supabase-js";
 
 /** =========================
- *  SUPABASE
+ *  SUPABASE (your project)
  *  ========================= */
 const SUPABASE_URL = "https://jpphthbbawkxbhzonvyz.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_b6cy5vUSAFkVxWkRyYJSUw_FagY1_5D";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+/** =========================
+ *  SUPPORT / REPORTING
+ *  ========================= */
 const SUPPORT_EMAIL = "chalkboards.app@gmail.com";
-const LIVE_GREEN = "#22c55e";
 
-type DbRow = {
+/** =========================
+ *  CONSISTENT ICONS
+ *  ========================= */
+const ICON_NOW = "🔥";
+const ICON_UPCOMING = "🕒";
+const ICON_FLASH = "⚡";
+
+/** =========================
+ *  TYPES
+ *  ========================= */
+type Weekday =
+  | "Sunday"
+  | "Monday"
+  | "Tuesday"
+  | "Wednesday"
+  | "Thursday"
+  | "Friday"
+  | "Saturday";
+
+type FlashSpecial = {
   id: string;
-  created_at: string;
-  type: string | null;
-  business_name: string | null;
-  deal: string | null;
-  address: string | null;
-  expires_at: string | null;
-  status: string | null;
-  extra: any | null;
-  lat: number | null;
-  lng: number | null;
-};
-
-type SpecialKind = "flash" | "weekly";
-
-type Special = {
-  id: string;
-  kind: SpecialKind;
   businessName: string;
-  address: string;
-  deal: string;
+  street: string;
+  city: string;
+  state: string;
+  zip: string;
+  fullAddress: string;
   lat: number;
   lng: number;
-  // weekly meta
-  day?: string;
-  start?: string;
-  end?: string;
-  // flash meta
-  expiresAt?: number;
+  description: string;
+  createdAt: number;
+  expiresAt: number;
 };
 
-type RestaurantCard = {
-  key: string;
+type WeeklySpecial = {
+  id: string;
   businessName: string;
-  address: string;
+  street: string;
+  city: string;
+  state: string;
+  zip: string;
+  fullAddress: string;
   lat: number;
   lng: number;
-  distance: number;
-  specials: Array<{
-    kind: SpecialKind;
-    label: string;
-    deal: string;
-    sub: string;
-  }>;
+  day: Weekday;
+  start: string; // "HH:MM"
+  end: string; // "HH:MM"
+  description: string;
+  createdAt: number;
 };
 
-function normLower(x: any) {
-  return String(x ?? "").trim().toLowerCase();
+type AmPm = "AM" | "PM";
+type Time12 = { hour: number; minute: string; ampm: AmPm };
+
+/** =========================
+ *  FONTS
+ *  ========================= */
+const HANDWRITING_FONT_HREF =
+  "https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap";
+const UI_FONT_HREF =
+  "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap";
+
+function ensureFontsLoaded() {
+  if (typeof document === "undefined") return;
+
+  const addLinkOnce = (id: string, href: string) => {
+    if (document.getElementById(id)) return;
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href = href;
+    document.head.appendChild(link);
+  };
+
+  addLinkOnce("chalkboards-handwriting-font", HANDWRITING_FONT_HREF);
+  addLinkOnce("chalkboards-ui-font", UI_FONT_HREF);
 }
 
-function isApprovedStatus(status: any): boolean {
-  if (status == null) return true;
-  const s = normLower(status);
-  return s === "approved" || s === "live" || s === "published";
+const WEEKDAYS: Weekday[] = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
+/** =========================
+ *  HELPERS
+ *  ========================= */
+function weekdayFromDate(d: Date): Weekday {
+  return WEEKDAYS[d.getDay()];
 }
 
-function isFlashType(t: any) {
-  const s = normLower(t);
-  return s === "flash" || s === "flash_special" || s === "f";
+function yesterdayFromDate(d: Date): Weekday {
+  const idx = d.getDay();
+  const y = (idx + 6) % 7;
+  return WEEKDAYS[y];
 }
 
-function isWeeklyType(t: any) {
-  const s = normLower(t);
-  return s === "weekly" || s === "weekly_special" || s === "w";
+function toMinutes(hhmm: string): number {
+  const parts = String(hhmm || "").split(":");
+  if (parts.length !== 2) return 0;
+  const hh = parseInt(parts[0], 10);
+  const mm = parseInt(parts[1], 10);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return 0;
+  return hh * 60 + mm;
+}
+
+function nowMinutes(): number {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+function format12Hour(d: Date): string {
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function formatHHMMTo12(hhmm: string): string {
+  const parts = String(hhmm || "").split(":");
+  if (parts.length !== 2) return hhmm;
+  const hh = parseInt(parts[0], 10);
+  const mm = parseInt(parts[1], 10);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return hhmm;
+
+  const d = new Date();
+  d.setHours(hh, mm, 0, 0);
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function prettyWindow(start: string, end: string): string {
+  const s = String(start || "").trim();
+  const e = String(end || "").trim();
+
+  const allDay =
+    (s === "00:00" && (e === "23:59" || e === "24:00" || e === "00:00")) ||
+    (s === "00:00" && e === "00:00");
+
+  if (allDay) return "All day";
+  return formatHHMMTo12(s) + " – " + formatHHMMTo12(e);
+}
+
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 3959; // miles
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function minutesFromNow(ms: number): number {
+  return Math.max(0, Math.ceil(ms / 60000));
+}
+
+async function geocodeAddress(
+  address: string
+): Promise<{ lat: number; lng: number } | null> {
+  const url =
+    "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" +
+    encodeURIComponent(address);
+  try {
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Array<{ lat: string; lon: string }>;
+    if (!data || data.length === 0) return null;
+    const lat = parseFloat(data[0].lat);
+    const lng = parseFloat(data[0].lon);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+    return { lat, lng };
+  } catch {
+    return null;
+  }
+}
+
+function mapsUrlFromAddress(address: string): string {
+  return (
+    "https://www.google.com/maps/search/?api=1&query=" +
+    encodeURIComponent(address)
+  );
+}
+
+function isFlashActiveNow(f: FlashSpecial): boolean {
+  const now = Date.now();
+  return now >= f.createdAt && now <= f.expiresAt;
 }
 
 function normalizeAddress(input: string): string {
@@ -91,75 +221,51 @@ function normalizeAddress(input: string): string {
     .replace(/\broute\b/g, "rte")
     .replace(/\bdrive\b/g, "dr")
     .replace(/\blane\b/g, "ln")
+    .replace(/\bhighway\b/g, "hwy")
+    .replace(/\bsuite\b/g, "ste")
+    .replace(/\bapartment\b/g, "apt")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function toMinutes(hhmm: string): number {
-  const parts = String(hhmm || "").split(":");
-  if (parts.length !== 2) return 0;
-  const hh = parseInt(parts[0], 10);
-  const mm = parseInt(parts[1], 10);
-  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return 0;
-  return hh * 60 + mm;
+function includesSearch(
+  query: string,
+  ...fields: Array<string | undefined | null>
+): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  for (const f of fields) {
+    const s = (f ?? "").toLowerCase();
+    if (s.includes(q)) return true;
+  }
+  return false;
 }
 
-function formatHHMMTo12(hhmm: string): string {
-  const parts = String(hhmm || "").split(":");
-  if (parts.length !== 2) return hhmm;
-  const hh = parseInt(parts[0], 10);
-  const mm = parseInt(parts[1], 10);
-  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return hhmm;
-  const d = new Date();
-  d.setHours(hh, mm, 0, 0);
-  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+function statusIcon(status: "active" | "later") {
+  return status === "active" ? ICON_NOW : ICON_UPCOMING;
 }
 
-function prettyWindow(start?: string, end?: string) {
-  const s = String(start || "").trim();
-  const e = String(end || "").trim();
-  if (!s || !e) return "";
-  const allDay =
-    (s === "00:00" && (e === "23:59" || e === "24:00" || e === "00:00")) ||
-    (s === "00:00" && e === "00:00");
-  if (allDay) return "All day";
-  return formatHHMMTo12(s) + "–" + formatHHMMTo12(e);
-}
-
-function minutesFromNow(ms: number): number {
-  return Math.max(0, Math.ceil(ms / 60000));
-}
-
-function getDistanceMiles(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 3959;
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-function mapsUrl(address: string) {
-  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(address);
-}
-
-function makeReportMailto(businessName: string, address: string) {
-  const subject = "Chalkboards Report Issue — " + businessName;
-  const body = [
+/** Report Issue -> opens email to SUPPORT_EMAIL with prefilled context */
+function makeReportMailto(params: {
+  businessName: string;
+  address: string;
+  description?: string;
+  kind: "flash" | "weekly";
+}) {
+  const subject = "Chalkboards Report Issue — " + params.businessName;
+  const bodyLines = [
     "Report issue:",
     "",
-    "Business: " + businessName,
-    "Address: " + address,
+    "Business: " + params.businessName,
+    "Address: " + params.address,
+    "Type: " + params.kind,
+    params.description ? "Special: " + params.description : "",
     "",
-    "What’s wrong?",
+    "What’s wrong? (tell us):",
     "",
-  ].join("\n");
+  ].filter(Boolean);
 
+  const body = bodyLines.join("\n");
   return (
     "mailto:" +
     SUPPORT_EMAIL +
@@ -170,450 +276,1884 @@ function makeReportMailto(businessName: string, address: string) {
   );
 }
 
-function safeParseWeekly(extra: any): { day: string; start: string; end: string } | null {
+/** =========================
+ *  CATEGORY FILTERS
+ *  ========================= */
+type CategoryKey =
+  | "all"
+  | "wings"
+  | "mexican"
+  | "pizza"
+  | "burgers"
+  | "sushi"
+  | "bbq"
+  | "seafood"
+  | "pasta"
+  | "med"
+  | "sandwiches"
+  | "breakfast"
+  | "lunch"
+  | "buffet"
+  | "beer"
+  | "cocktails"
+  | "coffee"
+  | "dessert"
+  | "happyhour"
+  | "latenight"
+  | "barfood";
+
+const CATEGORIES: Array<{ key: CategoryKey; label: string; emoji: string }> = [
+  { key: "all", label: "All", emoji: "🗺️" },
+  { key: "wings", label: "Wings", emoji: "🍗" },
+  { key: "mexican", label: "Mexican", emoji: "🌮" },
+  { key: "pizza", label: "Pizza", emoji: "🍕" },
+  { key: "burgers", label: "Burgers", emoji: "🍔" },
+  { key: "sushi", label: "Sushi", emoji: "🍣" },
+  { key: "bbq", label: "BBQ", emoji: "🍖" },
+  { key: "seafood", label: "Seafood", emoji: "🦞" },
+  { key: "pasta", label: "Pasta", emoji: "🍝" },
+  { key: "med", label: "Mediterranean", emoji: "🥙" },
+  { key: "sandwiches", label: "Sandwiches", emoji: "🥪" },
+  { key: "breakfast", label: "Breakfast", emoji: "🍳" },
+  { key: "lunch", label: "Lunch", emoji: "🌞" },
+  { key: "buffet", label: "Buffet", emoji: "🍽️" },
+  { key: "beer", label: "Beer", emoji: "🍺" },
+  { key: "cocktails", label: "Cocktails", emoji: "🍸" },
+  { key: "coffee", label: "Coffee", emoji: "☕" },
+  { key: "dessert", label: "Dessert", emoji: "🍰" },
+  { key: "happyhour", label: "Happy Hour", emoji: "⏰" },
+  { key: "latenight", label: "Late Night", emoji: "🌙" },
+  { key: "barfood", label: "Bar Food", emoji: "🍻" },
+];
+
+const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
+  all: [],
+  wings: ["wing", "wings", "boneless", "tenders", "drum", "flat"],
+  mexican: [
+    "mexican",
+    "taqueria",
+    "cantina",
+    "tex-mex",
+    "tortilla",
+    "taco",
+    "tacos",
+    "taco tuesday",
+    "birria",
+    "quesabirria",
+    "al pastor",
+    "pastor",
+    "barbacoa",
+    "carnitas",
+    "carne asada",
+    "burrito",
+    "burritos",
+    "quesadilla",
+    "quesadillas",
+    "nacho",
+    "nachos",
+    "enchilada",
+    "enchiladas",
+    "fajita",
+    "fajitas",
+    "tostada",
+    "tostadas",
+    "tamale",
+    "tamales",
+    "elote",
+    "guac",
+    "guacamole",
+    "salsa",
+    "chips",
+    "margarita",
+    "margaritas",
+    "tequila",
+  ],
+  pizza: ["pizza", "slice", "pie", "pizzeria", "stromboli", "calzone"],
+  burgers: ["burger", "cheeseburger", "patty", "smashburger", "fries"],
+  sushi: ["sushi", "maki", "sashimi", "roll", "nigiri", "poke", "ramen", "hibachi", "teriyaki"],
+  bbq: ["bbq", "barbecue", "brisket", "ribs", "smoke", "smoked", "pulled pork"],
+  seafood: ["seafood", "shrimp", "oyster", "oysters", "lobster", "clams", "mussels", "crab", "fish", "salmon", "tuna"],
+  pasta: ["pasta", "spaghetti", "penne", "vodka", "alfredo", "parm", "parmesan", "lasagna", "gnocchi", "ravioli", "italian"],
+  med: ["mediterranean", "med", "greek", "gyro", "gyros", "shawarma", "falafel", "halal", "kebab", "kabob", "pita", "tzatziki", "hummus", "platter", "lamb", "chicken over rice"],
+  sandwiches: ["sandwich", "sub", "subs", "hero", "hoagie", "wrap", "panini", "deli", "cheesesteak", "chicken sandwich"],
+  breakfast: ["breakfast", "brunch", "pancake", "waffle", "eggs", "omelet", "bacon", "bagel"],
+  lunch: ["lunch", "lunch special", "lunch specials", "power lunch", "midday", "noon", "11am", "12pm", "1pm", "2pm"],
+  buffet: ["buffet", "brunch buffet", "breakfast buffet", "lunch buffet", "dinner buffet", "all you can eat", "all-you-can-eat", "ayce", "unlimited"],
+  beer: ["beer", "draft", "pint", "ipa", "lager", "brew", "brewery", "bucket", "pitcher"],
+  cocktails: ["drink", "drinks", "cocktail", "martini", "margarita", "mojito", "old fashioned", "whiskey", "vodka", "tequila", "wine", "sangria"],
+  coffee: ["coffee", "espresso", "latte", "cappuccino", "cafe", "iced coffee", "cold brew"],
+  dessert: ["dessert", "ice cream", "gelato", "cake", "brownie", "cookie", "donut", "cannoli", "cheesecake"],
+  happyhour: ["happy hour", "hh", "2-for-1", "two for one", "bogo", "half off"],
+  latenight: ["late night", "after 9", "after 10", "after 11", "midnight", "kitchen open late"],
+  barfood: ["bar food", "apps", "appetizer", "nachos", "sliders", "wings", "fries", "pub", "tavern"],
+};
+
+function matchesCategory(
+  category: CategoryKey,
+  ...fields: Array<string | undefined | null>
+) {
+  if (category === "all") return true;
+  const kws = CATEGORY_KEYWORDS[category] || [];
+  const blob = fields.map((x) => (x ?? "").toLowerCase()).join(" • ");
+  return kws.some((k) => blob.includes(k));
+}
+
+/** =========================
+ *  TIME (AM/PM) HELPERS
+ *  ========================= */
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function time12To24(t: Time12): string {
+  let h = t.hour;
+  if (t.ampm === "AM") {
+    if (h === 12) h = 0;
+  } else {
+    if (h !== 12) h = h + 12;
+  }
+  return pad2(h) + ":" + t.minute;
+}
+
+function prettyTime12(t: Time12): string {
+  return String(t.hour) + ":" + t.minute + " " + t.ampm;
+}
+
+function TimePicker12({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: Time12;
+  onChange: (next: Time12) => void;
+}) {
+  const hours = Array.from({ length: 12 }, (_, i) => i + 1);
+  const minutes = ["00", "15", "30", "45"];
+
+  return (
+    <div style={{ display: "grid", gap: 6 }}>
+      <div style={styles.label}>{label}</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <select
+          value={value.hour}
+          onChange={(e) =>
+            onChange({ ...value, hour: parseInt(e.target.value, 10) })
+          }
+          style={styles.select}
+        >
+          {hours.map((h) => (
+            <option key={h} value={h}>
+              {h}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={value.minute}
+          onChange={(e) => onChange({ ...value, minute: e.target.value })}
+          style={styles.select}
+        >
+          {minutes.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={value.ampm}
+          onChange={(e) =>
+            onChange({ ...value, ampm: e.target.value as AmPm })
+          }
+          style={styles.select}
+        >
+          <option value="AM">AM</option>
+          <option value="PM">PM</option>
+        </select>
+      </div>
+    </div>
+  );
+}
+
+/** =========================
+ *  SUPABASE TABLE SHAPE
+ *  ========================= */
+type DbSpecialRow = {
+  id: string;
+  created_at: string;
+  type: string | null;
+  business_name: string | null;
+  deal: string | null;
+  address: string | null;
+  expires_at: string | null;
+  status: string | null;
+  extra: any | null; // string OR object
+  lat: number | null;
+  lng: number | null;
+};
+
+function normLower(x: any): string {
+  return String(x ?? "").trim().toLowerCase();
+}
+
+function isApprovedStatus(status: any): boolean {
+  // Treat NULL as approved so legacy rows don't disappear
+  if (status == null) return true;
+  const s = normLower(status);
+  return s === "approved" || s === "approve" || s === "live" || s === "published";
+}
+
+function isFlashType(t: any): boolean {
+  const s = normLower(t);
+  return s === "flash" || s === "f" || s === "flash_special";
+}
+
+function isWeeklyType(t: any): boolean {
+  const s = normLower(t);
+  return s === "weekly" || s === "w" || s === "weekly_special";
+}
+
+function normalizeWeekday(input: any): Weekday | null {
+  const s = String(input ?? "").trim().toLowerCase();
+  if (!s) return null;
+
+  const map: Record<string, Weekday> = {
+    sun: "Sunday",
+    sunday: "Sunday",
+    mon: "Monday",
+    monday: "Monday",
+    tue: "Tuesday",
+    tues: "Tuesday",
+    tuesday: "Tuesday",
+    wed: "Wednesday",
+    weds: "Wednesday",
+    wednesday: "Wednesday",
+    thu: "Thursday",
+    thur: "Thursday",
+    thurs: "Thursday",
+    thursday: "Thursday",
+    fri: "Friday",
+    friday: "Friday",
+    sat: "Saturday",
+    saturday: "Saturday",
+  };
+
+  return map[s] ?? null;
+}
+
+function tryParseWeeklyMeta(
+  extra: any | null
+): { day: Weekday; start: string; end: string } | null {
   if (!extra) return null;
-  if (typeof extra === "object") {
-    const day = String(extra.day ?? "").trim();
-    const start = String(extra.start ?? "").trim();
-    const end = String(extra.end ?? "").trim();
+
+  const coerce = (obj: any) => {
+    const day = normalizeWeekday(obj?.day);
+    const start = String(obj?.start ?? "").trim();
+    const end = String(obj?.end ?? "").trim();
     if (!day || !start || !end) return null;
     return { day, start, end };
-  }
+  };
+
+  if (typeof extra === "object") return coerce(extra);
+
   if (typeof extra === "string") {
+    const trimmed = extra.trim();
+    if (!trimmed) return null;
     try {
-      const obj = JSON.parse(extra);
-      return safeParseWeekly(obj);
+      return coerce(JSON.parse(trimmed));
     } catch {
       return null;
     }
   }
+
   return null;
 }
 
-function rowsToSpecials(rows: DbRow[]): Special[] {
-  const out: Special[] = [];
+function splitAddress(fullAddress: string) {
+  const parts = fullAddress.split(",").map((x) => x.trim());
+  const street = parts[0] ?? "";
+  const city = parts[1] ?? "";
+  let state = "";
+  let zip = "";
+  if (parts[2]) {
+    const p = parts[2].split(" ").filter(Boolean);
+    state = p[0] ?? "";
+    zip = p[1] ?? "";
+  }
+  return { street, city, state, zip };
+}
 
+function rowsToFlash(rows: DbSpecialRow[]): FlashSpecial[] {
+  const list: FlashSpecial[] = [];
   for (const r of rows) {
+    if (!isFlashType(r.type)) continue;
     if (!isApprovedStatus(r.status)) continue;
-    if (!r.business_name || !r.deal || !r.address) continue;
+    if (!r.address || !r.business_name || !r.deal) continue;
+    if (r.lat == null || r.lng == null) continue;
+    if (!r.expires_at) continue;
+
+    const createdAt = new Date(r.created_at).getTime();
+    const expiresAt = new Date(r.expires_at).getTime();
+    if (!Number.isFinite(createdAt) || !Number.isFinite(expiresAt)) continue;
+
+    const fullAddress = r.address;
+    const s = splitAddress(fullAddress);
+
+    list.push({
+      id: r.id,
+      businessName: r.business_name,
+      street: s.street,
+      city: s.city,
+      state: s.state,
+      zip: s.zip,
+      fullAddress,
+      lat: r.lat,
+      lng: r.lng,
+      description: r.deal,
+      createdAt,
+      expiresAt,
+    });
+  }
+  return list.filter(isFlashActiveNow);
+}
+
+function rowsToWeekly(rows: DbSpecialRow[]): WeeklySpecial[] {
+  const list: WeeklySpecial[] = [];
+  for (const r of rows) {
+    if (!isWeeklyType(r.type)) continue;
+    if (!isApprovedStatus(r.status)) continue;
+    if (!r.address || !r.business_name || !r.deal) continue;
     if (r.lat == null || r.lng == null) continue;
 
-    if (isFlashType(r.type)) {
-      if (!r.expires_at) continue;
-      const expiresAt = new Date(r.expires_at).getTime();
-      if (!Number.isFinite(expiresAt)) continue;
-      if (Date.now() > expiresAt) continue;
+    const meta = tryParseWeeklyMeta(r.extra);
+    if (!meta) continue;
 
-      out.push({
-        id: r.id,
-        kind: "flash",
-        businessName: r.business_name,
-        address: r.address,
-        deal: r.deal,
-        lat: r.lat,
-        lng: r.lng,
-        expiresAt,
-      });
-      continue;
-    }
+    const createdAt = new Date(r.created_at).getTime();
+    if (!Number.isFinite(createdAt)) continue;
 
-    if (isWeeklyType(r.type)) {
-      const meta = safeParseWeekly(r.extra);
-      if (!meta) continue;
+    const fullAddress = r.address;
+    const s = splitAddress(fullAddress);
 
-      out.push({
-        id: r.id,
-        kind: "weekly",
-        businessName: r.business_name,
-        address: r.address,
-        deal: r.deal,
-        lat: r.lat,
-        lng: r.lng,
-        day: meta.day,
-        start: meta.start,
-        end: meta.end,
-      });
-      continue;
-    }
+    list.push({
+      id: r.id,
+      businessName: r.business_name,
+      street: s.street,
+      city: s.city,
+      state: s.state,
+      zip: s.zip,
+      fullAddress,
+      lat: r.lat,
+      lng: r.lng,
+      day: meta.day,
+      start: meta.start,
+      end: meta.end,
+      description: r.deal,
+      createdAt,
+    });
   }
-
-  return out;
+  return list;
 }
 
-function nowMinutes() {
-  const d = new Date();
-  return d.getHours() * 60 + d.getMinutes();
+/** =========================
+ *  FEED TYPES
+ *  ========================= */
+type TodayRow = {
+  businessName: string;
+  address: string;
+  lat: number;
+  lng: number;
+  start: string;
+  end: string;
+  description: string;
+  status: "active" | "later";
+  startsInMinutes?: number;
+  distance?: number;
+  day?: Weekday;
+};
+
+type RegularFeedItem = {
+  kind: "regular";
+  businessName: string;
+  address: string;
+  description: string;
+  status: "active" | "later";
+  start: string;
+  end: string;
+  day?: Weekday;
+  startsInMinutes?: number;
+  distance: number;
+};
+
+type FlashFeedItem = {
+  kind: "flash";
+  businessName: string;
+  address: string;
+  description: string;
+  expiresInMinutes: number;
+  distance: number;
+};
+
+type GroupedFeed = {
+  key: string;
+  businessName: string;
+  address: string;
+  distance: number;
+  hasActiveRegular: boolean;
+  regularItems: RegularFeedItem[];
+  flashItems: FlashFeedItem[];
+};
+
+type FeedMode = "now" | "upcoming";
+
+/** =========================
+ *  GROUPED CARD (SHOW ALL SPECIALS)
+ *  ========================= */
+function GroupedCard({
+  group,
+  featured,
+}: {
+  group: GroupedFeed;
+  featured: boolean;
+}) {
+  const hasFlash = group.flashItems.length > 0;
+  const hasActive = hasFlash || group.hasActiveRegular;
+
+  const distanceText =
+    group.distance >= 999999 ? "" : String(group.distance.toFixed(1)) + " mi";
+
+  const reportHref = makeReportMailto({
+    businessName: group.businessName || "Business",
+    address: group.address || "",
+    description:
+      group.flashItems[0]?.description || group.regularItems[0]?.description,
+    kind: group.flashItems.length > 0 ? "flash" : "weekly",
+  });
+
+  return (
+    <div style={featured ? styles.cardFeatured : styles.card}>
+      <div style={styles.cardTop}>
+        <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+          <div style={styles.cardTitleRow}>
+            <div style={styles.cardTitle}>{group.businessName}</div>
+            {featured ? <div style={styles.featuredPill}>TOP 5 NEAR YOU</div> : null}
+          </div>
+          <div style={styles.cardSubtle}>{group.address}</div>
+        </div>
+
+        <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
+          <div style={styles.cardSubtle}>{distanceText ? distanceText : ""}</div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {hasFlash && <div style={styles.badgeFlash}>FLASH</div>}
+            <div style={hasActive ? styles.badgeActive : styles.badgeLater}>
+              {hasActive ? "ACTIVE" : "LATER"}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Flash specials (ALL) */}
+      {group.flashItems.length > 0 ? (
+        <div style={{ marginTop: 12 }}>
+          <div style={styles.blockHeader}>Flash</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {group.flashItems.map((f, idx) => (
+              <div key={"f-" + idx} style={styles.specialRow}>
+                <div style={styles.specialTagFlash}>{ICON_FLASH} FLASH</div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={styles.specialText}>{f.description}</div>
+                  <div style={styles.specialMeta}>
+                    expires in {f.expiresInMinutes} min
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Weekly/Today specials (ALL) */}
+      {group.regularItems.length > 0 ? (
+        <div style={{ marginTop: 12 }}>
+          <div style={styles.blockHeader}>Weekly</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {group.regularItems.map((r, idx) => (
+              <div key={"r-" + idx} style={styles.specialRow}>
+                <div style={styles.specialTagWeekly}>🗓️ WEEKLY</div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={styles.specialText}>
+                    {r.day ? r.day + " • " : ""}
+                    {r.description}
+                  </div>
+                  <div style={styles.specialMeta}>{prettyWindow(r.start, r.end)}</div>
+                </div>
+                <div style={{ marginLeft: "auto" }}>
+                  <div style={r.status === "active" ? styles.dotActive : styles.dotLater} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <a
+          href={mapsUrlFromAddress(group.address)}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={styles.mapLink}
+        >
+          Open in Maps
+        </a>
+
+        <a href={reportHref} style={styles.reportLink}>
+          Report issue
+        </a>
+      </div>
+    </div>
+  );
 }
 
+/** =========================
+ *  APP
+ *  ========================= */
 export default function App() {
-  // What you asked for:
-  const INITIAL_TOTAL_CARDS = 10; // total visible cards on first load
-  const FEATURED_COUNT = 5; // top 5 inside those 10
-  const LOAD_MORE_STEP = 10; // each click adds 10 more
-
   const mapRef = useRef<L.Map | null>(null);
-  const mapElRef = useRef<HTMLDivElement | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<L.Marker[]>([]);
+  const userMarkerRef = useRef<L.Marker | null>(null);
 
-  const [showMap, setShowMap] = useState(false);
+  const [mapOn, setMapOn] = useState(false);
 
-  const [loading, setLoading] = useState(true);
-  const [errorText, setErrorText] = useState("");
+  const [feedMode, setFeedMode] = useState<FeedMode>("upcoming");
+  const showLaterToday = feedMode === "upcoming";
 
-  const [search, setSearch] = useState("");
   const [radius, setRadius] = useState(10);
+  const [userLocation, setUserLocation] = useState({ lat: 40.88, lng: -74.07 });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [category, setCategory] = useState<CategoryKey>("all");
 
-  // page = how many “extra 10s” beyond the initial 10
-  const [page, setPage] = useState(0);
+  const [dbStatus, setDbStatus] = useState<"idle" | "loading" | "ok" | "error">(
+    "idle"
+  );
+  const [dbErrorText, setDbErrorText] = useState<string>("");
 
-  const [reloadTick, setReloadTick] = useState(0);
+  // pagination (10 cards per page)
+  const [cardsToShow, setCardsToShow] = useState(10);
 
-  const [user, setUser] = useState({ lat: 40.88, lng: -74.07 });
-  const [specials, setSpecials] = useState<Special[]>([]);
+  useEffect(() => {
+    ensureFontsLoaded();
+  }, []);
 
-  // user location
+  // Reset pagination when the user changes filters / mode
+  useEffect(() => {
+    setCardsToShow(10);
+  }, [radius, searchTerm, category, feedMode, userLocation.lat, userLocation.lng]);
+
+  // Try to set user location on load (silent)
   useEffect(() => {
     if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) => setUser({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+      },
       () => {},
       { enableHighAccuracy: false, timeout: 4000, maximumAge: 10 * 60 * 1000 }
     );
   }, []);
 
-  // load supabase (and refresh)
-  useEffect(() => {
-    let cancel = false;
+  // FLASH
+  const [flashSpecials, setFlashSpecials] = useState<FlashSpecial[]>([]);
+  const [showFlashForm, setShowFlashForm] = useState(false);
+  const [flashBusinessName, setFlashBusinessName] = useState("");
+  const [flashStreet, setFlashStreet] = useState("");
+  const [flashCity, setFlashCity] = useState("");
+  const [flashState, setFlashState] = useState("");
+  const [flashZip, setFlashZip] = useState("");
+  const [flashDescription, setFlashDescription] = useState("");
+  const [flashDurationMins, setFlashDurationMins] = useState(120);
+  const [flashPosting, setFlashPosting] = useState(false);
 
-    async function load() {
-      setLoading(true);
-      setErrorText("");
+  // WEEKLY
+  const [weeklySpecials, setWeeklySpecials] = useState<WeeklySpecial[]>([]);
+  const [showWeeklyForm, setShowWeeklyForm] = useState(false);
+  const [weeklyBusinessName, setWeeklyBusinessName] = useState("");
+  const [weeklyStreet, setWeeklyStreet] = useState("");
+  const [weeklyCity, setWeeklyCity] = useState("");
+  const [weeklyState, setWeeklyState] = useState("");
+  const [weeklyZip, setWeeklyZip] = useState("");
+  const [weeklyDescription, setWeeklyDescription] = useState("");
+  const [weeklyDay, setWeeklyDay] = useState<Weekday>("Monday");
+
+  const [weeklyStart12, setWeeklyStart12] = useState<Time12>({
+    hour: 11,
+    minute: "00",
+    ampm: "AM",
+  });
+  const [weeklyEnd12, setWeeklyEnd12] = useState<Time12>({
+    hour: 2,
+    minute: "00",
+    ampm: "PM",
+  });
+
+  const [weeklyPosting, setWeeklyPosting] = useState(false);
+
+  /** =========================
+   *  REFRESH CONTROL
+   *  ========================= */
+  const [reloadTick, setReloadTick] = useState(0);
+
+  /** =========================
+   *  LOAD FROM SUPABASE (and refresh)
+   *  ========================= */
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadFromSupabase() {
+      setDbStatus("loading");
+      setDbErrorText("");
 
       const { data, error } = await supabase
         .from("specials")
-        .select("id, created_at, type, business_name, deal, address, expires_at, status, extra, lat, lng")
+        .select(
+          "id, created_at, type, business_name, deal, address, expires_at, status, extra, lat, lng"
+        )
         .order("created_at", { ascending: false })
-        .limit(2000);
+        .limit(600);
 
-      if (cancel) return;
+      if (cancelled) return;
 
       if (error) {
-        setErrorText(error.message || "Supabase error");
-        setSpecials([]);
-        setLoading(false);
+        console.log("SUPABASE LOAD ERROR:", error);
+        setDbStatus("error");
+        setDbErrorText(error.message || "Unknown Supabase error");
+        setFlashSpecials([]);
+        setWeeklySpecials([]);
         return;
       }
 
-      setSpecials(rowsToSpecials((data ?? []) as DbRow[]));
-      setLoading(false);
+      const rows = (data ?? []) as DbSpecialRow[];
+
+      let nextFlash: FlashSpecial[] = [];
+      let nextWeekly: WeeklySpecial[] = [];
+      try {
+        nextFlash = rowsToFlash(rows);
+      } catch (e) {
+        console.log("FLASH PARSE ERROR:", e);
+        nextFlash = [];
+      }
+      try {
+        nextWeekly = rowsToWeekly(rows);
+      } catch (e) {
+        console.log("WEEKLY PARSE ERROR:", e);
+        nextWeekly = [];
+      }
+
+      setFlashSpecials(nextFlash);
+      setWeeklySpecials(nextWeekly);
+      setDbStatus("ok");
     }
 
-    load();
-    const t = setInterval(load, 30000);
+    loadFromSupabase();
     return () => {
-      cancel = true;
-      clearInterval(t);
+      cancelled = true;
     };
   }, [reloadTick]);
 
-  // reset pagination when filters change
+  /** =========================
+   *  TICK for countdown + expiry + auto refresh
+   *  ========================= */
+  const [timeTick, setTimeTick] = useState(0);
   useEffect(() => {
-    setPage(0);
-  }, [search, radius, user.lat, user.lng]);
+    const t = setInterval(() => {
+      setTimeTick((x) => x + 1);
+      setReloadTick((x) => x + 1);
+    }, 30000);
+    return () => clearInterval(t);
+  }, []);
 
-  const cards = useMemo((): RestaurantCard[] => {
-    const q = search.trim().toLowerCase();
-    const nowM = nowMinutes();
-    const map = new Map<string, RestaurantCard>();
+  useEffect(() => {
+    setFlashSpecials((prev) => prev.filter((f) => isFlashActiveNow(f)));
+  }, [timeTick]);
 
-    for (const s of specials) {
-      const dist = getDistanceMiles(user.lat, user.lng, s.lat, s.lng);
+  const todayDate = new Date();
+  const today = weekdayFromDate(todayDate);
+  const yesterday = yesterdayFromDate(todayDate);
+  const nowMins = nowMinutes();
+
+  const wingIcon = useMemo(
+    () =>
+      L.icon({
+        iconUrl: "https://cdn-icons-png.flaticon.com/512/1147/1147850.png",
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32],
+      }),
+    []
+  );
+
+  const userIcon = useMemo(
+    () =>
+      L.icon({
+        iconUrl: "https://cdn-icons-png.flaticon.com/512/149/149059.png",
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32],
+      }),
+    []
+  );
+
+  /** =========================
+   *  TODAY ROWS (handles overnight weekly specials)
+   *  ========================= */
+  const todayRows = useMemo((): TodayRow[] => {
+    const rows: TodayRow[] = [];
+
+    for (const w of weeklySpecials) {
+      const dist = getDistance(userLocation.lat, userLocation.lng, w.lat, w.lng);
       if (dist > radius) continue;
 
-      const blob = (s.businessName + " " + s.address + " " + s.deal).toLowerCase();
-      if (q && !blob.includes(q)) continue;
+      const startM = toMinutes(w.start);
+      const endRaw = toMinutes(w.end);
+      const crossesMidnight = endRaw <= startM;
 
-      const key = normalizeAddress(s.address);
+      // Case A: scheduled for today
+      if (w.day === today) {
+        let endM = endRaw;
+        if (crossesMidnight) endM += 24 * 60;
 
-      if (!map.has(key)) {
-        map.set(key, {
-          key,
-          businessName: s.businessName,
-          address: s.address,
-          lat: s.lat,
-          lng: s.lng,
-          distance: dist,
-          specials: [],
-        });
-      } else {
-        const g = map.get(key)!;
-        if (dist < g.distance) g.distance = dist;
+        const isLater = nowMins < startM;
+        const isActive = nowMins >= startM && nowMins <= endM;
+
+        if (isActive) {
+          rows.push({
+            businessName: w.businessName,
+            address: w.fullAddress,
+            lat: w.lat,
+            lng: w.lng,
+            start: w.start,
+            end: w.end,
+            description: w.description,
+            status: "active",
+            distance: dist,
+            day: w.day,
+          });
+        } else if (isLater) {
+          rows.push({
+            businessName: w.businessName,
+            address: w.fullAddress,
+            lat: w.lat,
+            lng: w.lng,
+            start: w.start,
+            end: w.end,
+            description: w.description,
+            status: "later",
+            startsInMinutes: startM - nowMins,
+            distance: dist,
+            day: w.day,
+          });
+        }
+        continue;
       }
 
-      const g = map.get(key)!;
+      // Case B: after midnight tail of yesterday's overnight special
+      if (crossesMidnight && w.day === yesterday) {
+        const endM = endRaw + 24 * 60;
+        const nowM = nowMins + 24 * 60;
+        const isActive = nowM >= startM && nowM <= endM;
 
-      if (s.kind === "flash") {
-        const mins = minutesFromNow((s.expiresAt || Date.now()) - Date.now());
-        g.specials.push({
-          kind: "flash",
-          label: "⚡ FLASH",
-          deal: s.deal,
-          sub: "expires in " + mins + " min",
-        });
-      } else {
-        const startM = toMinutes(s.start || "00:00");
-        const endMraw = toMinutes(s.end || "00:00");
-        const crosses = endMraw <= startM;
-
-        const active = (() => {
-          if (!s.start || !s.end) return false;
-          if (!crosses) return nowM >= startM && nowM <= endMraw;
-          return nowM >= startM || nowM <= endMraw;
-        })();
-
-        g.specials.push({
-          kind: "weekly",
-          label: "🗓️ WEEKLY • " + String(s.day || "").trim(),
-          deal: s.deal,
-          sub: (s.start && s.end ? prettyWindow(s.start, s.end) : "") + (active ? " • ACTIVE" : ""),
-        });
+        if (isActive) {
+          rows.push({
+            businessName: w.businessName,
+            address: w.fullAddress,
+            lat: w.lat,
+            lng: w.lng,
+            start: w.start,
+            end: w.end,
+            description: w.description,
+            status: "active",
+            distance: dist,
+            day: w.day,
+          });
+        }
       }
     }
 
-    const list = Array.from(map.values());
+    const filtered = rows
+      .filter((r) =>
+        includesSearch(searchTerm, r.businessName, r.address, r.description)
+      )
+      .filter((r) =>
+        matchesCategory(category, r.description, r.businessName, r.address)
+      );
 
-    // True discovery: restaurants sorted ONLY by distance
-    list.sort((a, b) => a.distance - b.distance);
+    // Keep sorting stable: distance first (true discovery), then active first, then time
+    filtered.sort((a, b) => {
+      const aDist = a.distance ?? 999999;
+      const bDist = b.distance ?? 999999;
+      if (aDist !== bDist) return aDist - bDist;
+      if (a.status !== b.status) return a.status === "active" ? -1 : 1;
+      return toMinutes(a.start) - toMinutes(b.start);
+    });
 
-    // Specials inside each restaurant: flash first, then weekly by day/time-ish
-    const dayRank: Record<string, number> = {
-      Sunday: 0,
-      Monday: 1,
-      Tuesday: 2,
-      Wednesday: 3,
-      Thursday: 4,
-      Friday: 5,
-      Saturday: 6,
+    return filtered;
+  }, [
+    today,
+    yesterday,
+    nowMins,
+    userLocation,
+    radius,
+    weeklySpecials,
+    searchTerm,
+    category,
+  ]);
+
+  const visibleTodayRows = useMemo(() => {
+    return todayRows.filter((r) => (showLaterToday ? true : r.status === "active"));
+  }, [todayRows, showLaterToday]);
+
+  const activeFlashInRadiusSorted = useMemo(() => {
+    return flashSpecials
+      .filter(isFlashActiveNow)
+      .map((f) => ({
+        f,
+        distance: getDistance(userLocation.lat, userLocation.lng, f.lat, f.lng),
+      }))
+      .filter((x) => x.distance <= radius)
+      .filter(({ f }) =>
+        includesSearch(searchTerm, f.businessName, f.fullAddress, f.description)
+      )
+      .filter(({ f }) =>
+        matchesCategory(category, f.description, f.businessName, f.fullAddress)
+      )
+      .sort((a, b) => a.distance - b.distance);
+  }, [flashSpecials, timeTick, userLocation, radius, searchTerm, category]);
+
+  /** =========================
+   *  GROUP ALL FEED (BY RESTAURANT)
+   *  - includes ALL specials per restaurant
+   *  - sorted by true distance
+   *  - featured = closest 5 by distance
+   *  ========================= */
+  const groupedAllFeed = useMemo((): GroupedFeed[] => {
+    const map = new Map<string, GroupedFeed>();
+
+    const addGroupIfNeeded = (
+      key: string,
+      businessName: string,
+      address: string,
+      distance: number
+    ) => {
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          businessName,
+          address,
+          distance,
+          hasActiveRegular: false,
+          regularItems: [],
+          flashItems: [],
+        });
+      } else {
+        const g = map.get(key)!;
+        if (distance < g.distance) g.distance = distance;
+        if (!g.address && address) g.address = address;
+        if (!g.businessName && businessName) g.businessName = businessName;
+      }
     };
 
-    list.forEach((c) => {
-      c.specials.sort((a, b) => {
-        if (a.kind !== b.kind) return a.kind === "flash" ? -1 : 1;
+    // Regular (today) — mode affects feed
+    visibleTodayRows.forEach((r) => {
+      const key = normalizeAddress(r.address);
+      addGroupIfNeeded(key, r.businessName, r.address, r.distance ?? 999999);
 
-        if (a.kind === "weekly" && b.kind === "weekly") {
-          const aDay = a.label.replace("🗓️ WEEKLY • ", "");
-          const bDay = b.label.replace("🗓️ WEEKLY • ", "");
-          const ra = dayRank[aDay] ?? 99;
-          const rb = dayRank[bDay] ?? 99;
-          if (ra !== rb) return ra - rb;
-          return a.deal.localeCompare(b.deal);
-        }
+      const g = map.get(key)!;
+      g.businessName = r.businessName;
 
-        return a.deal.localeCompare(b.deal);
+      g.regularItems.push({
+        kind: "regular",
+        businessName: r.businessName,
+        address: r.address,
+        description: r.description,
+        status: r.status,
+        start: r.start,
+        end: r.end,
+        day: r.day,
+        startsInMinutes: r.startsInMinutes,
+        distance: r.distance ?? 999999,
+      });
+
+      if (r.status === "active") g.hasActiveRegular = true;
+    });
+
+    // Flash (always shown)
+    activeFlashInRadiusSorted.forEach(({ f, distance }) => {
+      const key = normalizeAddress(f.fullAddress);
+      addGroupIfNeeded(key, f.businessName, f.fullAddress, distance);
+
+      const g = map.get(key)!;
+      g.flashItems.push({
+        kind: "flash",
+        businessName: f.businessName,
+        address: f.fullAddress,
+        description: f.description,
+        expiresInMinutes: minutesFromNow(f.expiresAt - Date.now()),
+        distance,
       });
     });
 
+    // finalize group
+    map.forEach((g) => {
+      g.flashItems.sort((a, b) => a.expiresInMinutes - b.expiresInMinutes);
+
+      // For weekly list inside card: keep stable order by day/time
+      g.regularItems.sort((a, b) => {
+        const ad = toMinutes(a.start);
+        const bd = toMinutes(b.start);
+        if (a.day !== b.day) return String(a.day || "").localeCompare(String(b.day || ""));
+        if (ad !== bd) return ad - bd;
+        return a.description.localeCompare(b.description);
+      });
+
+      if (g.regularItems.length > 0) {
+        g.address = g.regularItems[0].address;
+        g.businessName = g.regularItems[0].businessName;
+      } else if (g.flashItems.length > 0) {
+        g.address = g.flashItems[0].address;
+        g.businessName = g.flashItems[0].businessName;
+      }
+    });
+
+    const list = Array.from(map.values());
+
+    // TRUE discovery: distance first, then active
+    list.sort((a, b) => {
+      if (a.distance !== b.distance) return a.distance - b.distance;
+      const aActive = a.flashItems.length > 0 || a.hasActiveRegular;
+      const bActive = b.flashItems.length > 0 || b.hasActiveRegular;
+      if (aActive !== bActive) return aActive ? -1 : 1;
+      return 0;
+    });
+
     return list;
-  }, [specials, user.lat, user.lng, radius, search]);
+  }, [visibleTodayRows, activeFlashInRadiusSorted, timeTick]);
 
-  // Visible list: 10 total initially, then +10 each click
-  const visibleCount = useMemo(
-    () => Math.min(cards.length, INITIAL_TOTAL_CARDS + page * LOAD_MORE_STEP),
-    [cards.length, page]
-  );
+  const featuredKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (let i = 0; i < Math.min(5, groupedAllFeed.length); i++) {
+      keys.add(groupedAllFeed[i].key);
+    }
+    return keys;
+  }, [groupedAllFeed]);
 
-  const visibleCards = useMemo(() => cards.slice(0, visibleCount), [cards, visibleCount]);
+  const featuredFeed = useMemo(() => {
+    return groupedAllFeed.slice(0, 5);
+  }, [groupedAllFeed]);
 
-  const hasMore = visibleCount < cards.length;
+  const pagedFeed = useMemo(() => {
+    return groupedAllFeed.slice(0, cardsToShow);
+  }, [groupedAllFeed, cardsToShow]);
 
-  // Map init (only when ON)
+  /** =========================
+   *  MAP INIT / DESTROY (only when map is ON)
+   *  ========================= */
   useEffect(() => {
-    if (!showMap) return;
-    if (!mapElRef.current) return;
-    if (mapRef.current) return;
-
-    mapRef.current = L.map(mapElRef.current).setView([user.lat, user.lng], 12);
-
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(mapRef.current);
-
-    return () => {
+    if (!mapOn) {
+      // turn off cleanly
+      if (markersRef.current.length) {
+        markersRef.current.forEach((m) => m.remove());
+        markersRef.current = [];
+      }
+      if (userMarkerRef.current) {
+        userMarkerRef.current.remove();
+        userMarkerRef.current = null;
+      }
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
       }
-    };
-  }, [showMap, user.lat, user.lng]);
+      return;
+    }
 
-  // Leaflet needs a resize kick when toggled on
-  useEffect(() => {
-    if (!showMap) return;
-    const t = setTimeout(() => {
-      if (mapRef.current) {
-        mapRef.current.invalidateSize();
-        mapRef.current.setView([user.lat, user.lng], 12);
-      }
-    }, 120);
-    return () => clearTimeout(t);
-  }, [showMap, user.lat, user.lng]);
+    if (mapContainerRef.current && !mapRef.current) {
+      mapRef.current = L.map(mapContainerRef.current).setView(
+        [userLocation.lat, userLocation.lng],
+        12
+      );
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution:
+          '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      }).addTo(mapRef.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapOn]);
 
-  // Markers = visible cards (what user is currently seeing)
+  // keep map centered when userLocation changes
   useEffect(() => {
-    if (!showMap) return;
+    if (!mapOn) return;
+    if (!mapRef.current) return;
+    mapRef.current.setView([userLocation.lat, userLocation.lng], 12);
+  }, [mapOn, userLocation.lat, userLocation.lng]);
+
+  /** =========================
+   *  MAP MARKERS UPDATE
+   *  ========================= */
+  useEffect(() => {
+    if (!mapOn) return;
     if (!mapRef.current) return;
 
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
-    const userMarker = L.marker([user.lat, user.lng]).addTo(mapRef.current);
-    markersRef.current.push(userMarker);
+    const esc = (s: string) =>
+      s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 
-    visibleCards.forEach((c) => {
-      const html =
+    // Marker per restaurant group
+    pagedFeed.forEach((g) => {
+      // pick a lat/lng from one of the items (we don't store in group)
+      // derive from original lists by matching address key
+      const key = g.key;
+
+      // Find a representative coordinate
+      let lat: number | null = null;
+      let lng: number | null = null;
+
+      const addrNorm = key;
+      for (const w of weeklySpecials) {
+        if (normalizeAddress(w.fullAddress) === addrNorm) {
+          lat = w.lat;
+          lng = w.lng;
+          break;
+        }
+      }
+      if (lat == null || lng == null) {
+        for (const f of flashSpecials) {
+          if (normalizeAddress(f.fullAddress) === addrNorm) {
+            lat = f.lat;
+            lng = f.lng;
+            break;
+          }
+        }
+      }
+
+      if (lat == null || lng == null) return;
+
+      const flashLines = g.flashItems.map((x) => ICON_FLASH + " " + x.description);
+      const regLines = g.regularItems.map(
+        (x) =>
+          "🗓️ " +
+          String(x.day || "") +
+          " " +
+          x.description +
+          " (" +
+          prettyWindow(x.start, x.end) +
+          ")"
+      );
+
+      const reportHref = makeReportMailto({
+        businessName: g.businessName || "Business",
+        address: g.address || "",
+        description: flashLines[0] || regLines[0] || "",
+        kind: flashLines.length > 0 ? "flash" : "weekly",
+      });
+
+      const flashHtml =
+        flashLines.length > 0
+          ? '<div style="margin-top:8px;">' +
+            "<div><b>Flash</b></div>" +
+            flashLines
+              .slice(0, 6)
+              .map((x) => "<div>" + esc(x) + "</div>")
+              .join("") +
+            "</div>"
+          : "";
+
+      const regHtml =
+        regLines.length > 0
+          ? '<div style="margin-top:8px;">' +
+            "<div><b>Weekly</b></div>" +
+            regLines
+              .slice(0, 8)
+              .map((x) => "<div>" + esc(x) + "</div>")
+              .join("") +
+            "</div>"
+          : "";
+
+      const linksHtml =
+        '<div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">' +
+        '<a href="' +
+        mapsUrlFromAddress(g.address) +
+        '" target="_blank" rel="noopener noreferrer">Open in Maps</a>' +
+        '<a href="' +
+        reportHref +
+        '">Report issue</a>' +
+        "</div>";
+
+      const popupHtml =
         "<b>" +
-        c.businessName +
-        "</b><br/>" +
-        c.address +
-        "<br/><br/>" +
-        c.specials
-          .slice(0, 10)
-          .map((s) => s.label + "<br/>" + s.deal + "<br/><i>" + s.sub + "</i>")
-          .join("<br/><br/>") +
-        '<br/><br/><a href="' +
-        mapsUrl(c.address) +
-        '" target="_blank" rel="noopener noreferrer">Open in Maps</a>';
+        esc(g.businessName || "Business") +
+        "</b><br>" +
+        esc(g.address) +
+        flashHtml +
+        regHtml +
+        linksHtml;
 
-      const m = L.marker([c.lat, c.lng]).addTo(mapRef.current!).bindPopup(html);
-      markersRef.current.push(m);
+      const marker = L.marker([lat, lng], { icon: wingIcon })
+        .addTo(mapRef.current!)
+        .bindPopup(popupHtml);
+
+      markersRef.current.push(marker);
     });
-  }, [showMap, visibleCards, user.lat, user.lng]);
+  }, [mapOn, pagedFeed, wingIcon, weeklySpecials, flashSpecials]);
 
-  const Card = ({ c, idx }: { c: RestaurantCard; idx: number }) => {
-    const featured = idx < FEATURED_COUNT; // top 5 by distance
-    const distText = c.distance >= 999999 ? "" : c.distance.toFixed(1) + " mi";
+  /** =========================
+   *  LOCATE ME
+   *  ========================= */
+  const handleLocateMe = () => {
+    if (!("geolocation" in navigator)) {
+      alert("Geolocation is not supported by your browser");
+      return;
+    }
 
-    return (
-      <div style={featured ? styles.cardFeatured : styles.card}>
-        <div style={styles.cardTop}>
-          <div style={{ minWidth: 0 }}>
-            <div style={styles.cardTitleRow}>
-              <div style={styles.cardTitle}>{c.businessName}</div>
-              {featured ? <div style={styles.top5Pill}>TOP 5 NEAR YOU</div> : null}
-            </div>
-            <div style={styles.addr}>{c.address}</div>
-          </div>
-          <div style={styles.dist}>{distText}</div>
-        </div>
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const newLocation = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        setUserLocation(newLocation);
 
-        <div style={styles.specials}>
-          {c.specials.map((s, i) => (
-            <div key={c.key + "-" + i} style={styles.specialRow}>
-              <div style={styles.specialLabel}>{s.label}</div>
-              <div style={styles.specialDeal}>{s.deal}</div>
-              <div style={styles.specialSub}>{s.sub}</div>
-            </div>
-          ))}
-        </div>
+        if (mapOn && mapRef.current) {
+          mapRef.current.setView([newLocation.lat, newLocation.lng], 12);
 
-        <div style={styles.links}>
-          <a href={mapsUrl(c.address)} target="_blank" rel="noopener noreferrer" style={styles.linkBtn}>
-            Open in Maps
-          </a>
-          <a href={makeReportMailto(c.businessName, c.address)} style={styles.linkGhost}>
-            Report issue
-          </a>
-        </div>
-      </div>
+          if (userMarkerRef.current) userMarkerRef.current.remove();
+          userMarkerRef.current = L.marker([newLocation.lat, newLocation.lng], {
+            icon: userIcon,
+          })
+            .addTo(mapRef.current)
+            .bindPopup("You are here")
+            .openPopup();
+        }
+      },
+      (error) => alert("Error getting location: " + error.message)
     );
   };
 
+  /** =========================
+   *  FLASH SUBMIT -> SUPABASE
+   *  ========================= */
+  const addFlashSpecial = async () => {
+    if (flashPosting) return;
+
+    const typedName = flashBusinessName.trim();
+    const street = flashStreet.trim();
+    const city = flashCity.trim();
+    const state = flashState.trim();
+    const zip = flashZip.trim();
+    const description = flashDescription.trim();
+
+    if (!typedName || !street || !city || !state || !zip || !description) {
+      alert(
+        "Please fill in ALL fields: business name, street, city, state, zip, and special."
+      );
+      return;
+    }
+
+    const fullAddress = street + ", " + city + ", " + state + " " + zip;
+
+    setFlashPosting(true);
+    const coords = await geocodeAddress(fullAddress);
+
+    if (!coords) {
+      setFlashPosting(false);
+      alert(
+        "Could not find that address. Please double-check the street, city, state, and ZIP."
+      );
+      return;
+    }
+
+    const now = Date.now();
+    const expiresAt = now + flashDurationMins * 60 * 1000;
+
+    const addrKey = normalizeAddress(fullAddress);
+    const fromExistingFlash =
+      flashSpecials.find((f) => normalizeAddress(f.fullAddress) === addrKey)
+        ?.businessName ?? null;
+    const fromWeekly =
+      weeklySpecials.find((w) => normalizeAddress(w.fullAddress) === addrKey)
+        ?.businessName ?? null;
+
+    const canonicalName = fromWeekly ?? fromExistingFlash ?? typedName;
+
+    const { error } = await supabase.from("specials").insert([
+      {
+        type: "flash",
+        business_name: canonicalName,
+        deal: description,
+        address: fullAddress,
+        expires_at: new Date(expiresAt).toISOString(),
+        status: "approved",
+        extra: null,
+        lat: coords.lat,
+        lng: coords.lng,
+      },
+    ]);
+
+    if (error) {
+      console.log("SUPABASE INSERT ERROR:", error);
+      setFlashPosting(false);
+      alert(
+        "Flash special could not save to the database.\n\nOpen Console and copy the error to me."
+      );
+      return;
+    }
+
+    setFlashBusinessName("");
+    setFlashStreet("");
+    setFlashCity("");
+    setFlashState("");
+    setFlashZip("");
+    setFlashDescription("");
+    setFlashDurationMins(120);
+    setShowFlashForm(false);
+    setFlashPosting(false);
+
+    setReloadTick((x) => x + 1);
+    alert("Posted live ✅");
+  };
+
+  /** =========================
+   *  WEEKLY SUBMIT -> SUPABASE
+   *  ========================= */
+  const addWeeklySpecial = async () => {
+    if (weeklyPosting) return;
+
+    const typedName = weeklyBusinessName.trim();
+    const street = weeklyStreet.trim();
+    const city = weeklyCity.trim();
+    const state = weeklyState.trim();
+    const zip = weeklyZip.trim();
+    const description = weeklyDescription.trim();
+    const day = weeklyDay;
+
+    if (!typedName || !street || !city || !state || !zip || !description || !day) {
+      alert("Please fill in ALL fields (name, address, day, time window, special).");
+      return;
+    }
+
+    const start = time12To24(weeklyStart12);
+    const end = time12To24(weeklyEnd12);
+
+    if (start === end) {
+      alert("Start and End time cannot be the same.");
+      return;
+    }
+
+    const fullAddress = street + ", " + city + ", " + state + " " + zip;
+
+    setWeeklyPosting(true);
+    const coords = await geocodeAddress(fullAddress);
+
+    if (!coords) {
+      setWeeklyPosting(false);
+      alert(
+        "Could not find that address. Please double-check the street, city, state, and ZIP."
+      );
+      return;
+    }
+
+    const addrKey = normalizeAddress(fullAddress);
+    const fromExistingFlash =
+      flashSpecials.find((f) => normalizeAddress(f.fullAddress) === addrKey)
+        ?.businessName ?? null;
+    const fromExistingWeekly =
+      weeklySpecials.find((w) => normalizeAddress(w.fullAddress) === addrKey)
+        ?.businessName ?? null;
+
+    const canonicalName = fromExistingWeekly ?? fromExistingFlash ?? typedName;
+    const extraObj = { day, start, end };
+
+    const { error } = await supabase.from("specials").insert([
+      {
+        type: "weekly",
+        business_name: canonicalName,
+        deal: description,
+        address: fullAddress,
+        expires_at: null,
+        status: "pending",
+        extra: extraObj,
+        lat: coords.lat,
+        lng: coords.lng,
+      },
+    ]);
+
+    if (error) {
+      console.log("SUPABASE WEEKLY INSERT ERROR:", error);
+      setWeeklyPosting(false);
+      alert(
+        "Weekly special could not save to the database.\n\nOpen Console and copy the error to me."
+      );
+      return;
+    }
+
+    setWeeklyBusinessName("");
+    setWeeklyStreet("");
+    setWeeklyCity("");
+    setWeeklyState("");
+    setWeeklyZip("");
+    setWeeklyDescription("");
+    setWeeklyDay("Monday");
+    setWeeklyStart12({ hour: 11, minute: "00", ampm: "AM" });
+    setWeeklyEnd12({ hour: 2, minute: "00", ampm: "PM" });
+    setShowWeeklyForm(false);
+    setWeeklyPosting(false);
+
+    setReloadTick((x) => x + 1);
+    alert("Submitted for approval ✅ (pending)");
+  };
+
+  const [hovered, setHovered] = useState<string | null>(null);
+
+  const buttonStyle = (
+    key: string,
+    variant: "primary" | "secondary" = "primary"
+  ): React.CSSProperties => {
+    const base =
+      variant === "primary"
+        ? { background: "rgba(0, 140, 255, 0.16)", border: "1px solid rgba(0, 140, 255, 0.34)" }
+        : { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)" };
+
+    const isHover = hovered === key;
+    return {
+      ...styles.buttonBase,
+      ...base,
+      transform: isHover ? "translateY(-1px)" : "translateY(0)",
+      boxShadow: isHover ? "0 10px 22px rgba(0,0,0,0.32)" : "0 6px 14px rgba(0,0,0,0.22)",
+      filter: isHover ? "brightness(1.06)" : "brightness(1)",
+      opacity: 1,
+    };
+  };
+
+  const chipStyle = (key: CategoryKey): React.CSSProperties => {
+    const active = category === key;
+    return {
+      flex: "0 0 auto",
+      padding: "8px 10px",
+      borderRadius: 999,
+      cursor: "pointer",
+      userSelect: "none",
+      fontWeight: 800,
+      fontSize: 13,
+      letterSpacing: 0.1,
+      border: active ? "1px solid rgba(0, 140, 255, 0.55)" : "1px solid rgba(255,255,255,0.12)",
+      background: active ? "rgba(0, 140, 255, 0.18)" : "rgba(255,255,255,0.05)",
+      color: "#f2f2f2",
+      whiteSpace: "nowrap",
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 8,
+    };
+  };
+
+  const segmentBtn = (active: boolean): React.CSSProperties => ({
+    ...styles.segmentBtn,
+    border: active ? "1px solid rgba(0, 140, 255, 0.55)" : "1px solid rgba(255,255,255,0.12)",
+    background: active ? "rgba(0, 140, 255, 0.18)" : "rgba(255,255,255,0.05)",
+  });
+
+  const formField = (label: string, child: React.ReactNode) => (
+    <div style={{ display: "grid", gap: 6 }}>
+      <div style={styles.label}>{label}</div>
+      {child}
+    </div>
+  );
+
+  const radiusLabel = radius === 999 ? "Anywhere" : String(radius) + " mi";
+  const categoryLabel =
+    category === "all"
+      ? "All categories"
+      : CATEGORIES.find((c) => c.key === category)?.label || "All categories";
+  const feedLabel =
+    feedMode === "now" ? ICON_NOW + " Happening Now" : ICON_UPCOMING + " Upcoming";
+
+  const featuredCount = Math.min(5, groupedAllFeed.length);
+  const showingCount = Math.min(cardsToShow, groupedAllFeed.length);
+
   return (
     <div style={styles.page}>
+      {/* HEADER */}
       <div style={styles.header}>
-        <div style={styles.brandRow}>
-          <div style={styles.brand}>Chalkboards</div>
-          <div style={styles.livePill}>LIVE</div>
-        </div>
-
-        <div style={styles.controls}>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search specials..."
-            style={styles.search}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <img
+            src="/favicon.png"
+            alt="Chalkboards"
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 14,
+              objectFit: "contain",
+              flex: "0 0 auto",
+            }}
           />
 
-          <div style={styles.row}>
+          <div style={{ minWidth: 0 }}>
+            <div className="cb-title" style={styles.title}>
+              Chalkboards
+            </div>
+
+            <div style={styles.subtitle}>
+              Live Local Specials • <b>{today}</b> • {format12Hour(new Date())} •{" "}
+              {dbStatus === "ok" ? (
+                <span
+                  onClick={() => setReloadTick((x) => x + 1)}
+                  style={{ color: "#00FF00", fontWeight: 900, cursor: "pointer" }}
+                  title="Tap to refresh"
+                >
+                  LIVE ↻
+                </span>
+              ) : dbStatus === "loading" ? (
+                <span style={{ opacity: 0.85 }}>Loading…</span>
+              ) : dbStatus === "error" ? (
+                <span style={{ color: "#ff6b6b", fontWeight: 800 }}>Offline</span>
+              ) : null}
+              {dbStatus === "error" && dbErrorText ? (
+                <span style={{ marginLeft: 10, opacity: 0.85 }}>({dbErrorText})</span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* CONTROLS */}
+      <div style={styles.controlsShell}>
+        <div
+          className="cb-chipRow"
+          style={styles.categoryRow}
+          onWheel={(e: React.WheelEvent<HTMLDivElement>) => {
+            const el = e.currentTarget;
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) el.scrollLeft += e.deltaY;
+            else el.scrollLeft += e.deltaX;
+          }}
+        >
+          {CATEGORIES.map((c) => (
             <button
-              onClick={() => {
-                setPage(0);
-                setReloadTick((x) => x + 1);
-              }}
-              style={styles.btn}
-              title="Reload from database"
+              key={c.key}
+              onClick={() => setCategory(c.key)}
+              style={chipStyle(c.key)}
+              title={c.label}
+            >
+              <span style={{ opacity: 0.95 }}>{c.emoji}</span>
+              <span>{c.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="cb-controlsRow" style={styles.controlsRow}>
+          <div className="cb-groupLeft" style={styles.groupLeft}>
+            <div style={styles.field}>
+              <div style={styles.label}>Distance</div>
+              <select
+                value={radius}
+                onChange={(e) => setRadius(parseFloat(e.target.value))}
+                style={styles.select}
+              >
+                <option value="0.5">0.5 mi</option>
+                <option value="1">1 mi</option>
+                <option value="2">2 mi</option>
+                <option value="5">5 mi</option>
+                <option value="10">10 mi</option>
+                <option value="999">Anywhere</option>
+              </select>
+            </div>
+
+            <div className="cb-searchField" style={styles.searchField}>
+              <div style={styles.label}>Search</div>
+              <input
+                className="cb-searchInput"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="name, address, or special…"
+                style={styles.searchInput}
+              />
+              {searchTerm.trim() ? (
+                <button
+                  onClick={() => setSearchTerm("")}
+                  style={buttonStyle("clearsearch", "secondary")}
+                  onMouseEnter={() => setHovered("clearsearch")}
+                  onMouseLeave={() => setHovered(null)}
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+
+            <button
+              onClick={() => setReloadTick((x) => x + 1)}
+              style={buttonStyle("refresh", "secondary")}
+              onMouseEnter={() => setHovered("refresh")}
+              onMouseLeave={() => setHovered(null)}
             >
               Refresh
             </button>
 
             <button
-              onClick={() => setShowMap((v) => !v)}
-              style={showMap ? styles.btnGreen : styles.btn}
+              onClick={() => setMapOn((v) => !v)}
+              style={buttonStyle("maptoggle", "secondary")}
+              onMouseEnter={() => setHovered("maptoggle")}
+              onMouseLeave={() => setHovered(null)}
               title="Toggle map"
             >
-              {showMap ? "Map: ON" : "Map: OFF"}
+              Map: {mapOn ? "ON" : "OFF"}
             </button>
 
-            <select value={radius} onChange={(e) => setRadius(parseInt(e.target.value, 10))} style={styles.select}>
-              <option value={5}>5 mi</option>
-              <option value={10}>10 mi</option>
-              <option value={20}>20 mi</option>
-              <option value={50}>50 mi</option>
-              <option value={999}>Anywhere</option>
-            </select>
-
-            <div style={styles.countPill}>
-              Featured <b>{Math.min(FEATURED_COUNT, cards.length)}</b> • Showing{" "}
-              <b>{visibleCount}</b> / {cards.length}
-            </div>
+            <button
+              onClick={handleLocateMe}
+              style={buttonStyle("locate", "secondary")}
+              onMouseEnter={() => setHovered("locate")}
+              onMouseLeave={() => setHovered(null)}
+            >
+              Use My Location
+            </button>
           </div>
 
-          {errorText ? <div style={styles.error}>{errorText}</div> : null}
-          {loading ? <div style={styles.subtle}>Loading…</div> : null}
+          <div className="cb-groupRight" style={styles.groupRight}>
+            <div style={styles.smallCounterPill}>
+              Featured {featuredCount} • Showing {showingCount} / {groupedAllFeed.length}
+            </div>
+
+            <button
+              onClick={() => setShowFlashForm((v) => !v)}
+              style={buttonStyle("flash", "primary")}
+              onMouseEnter={() => setHovered("flash")}
+              onMouseLeave={() => setHovered(null)}
+            >
+              {showFlashForm ? "Close Flash" : "Post Flash"}
+            </button>
+
+            <button
+              onClick={() => setShowWeeklyForm((v) => !v)}
+              style={buttonStyle("weekly", "secondary")}
+              onMouseEnter={() => setHovered("weekly")}
+              onMouseLeave={() => setHovered(null)}
+            >
+              {showWeeklyForm ? "Close Weekly" : "Post Weekly"}
+            </button>
+          </div>
         </div>
+
+        {/* 🔥 Happening Now / 🕒 Upcoming */}
+        <div className="cb-controlsFooterRow" style={styles.controlsFooterRow}>
+          <div style={styles.segmentWrap} aria-label="Feed mode">
+            <button
+              type="button"
+              onClick={() => setFeedMode("now")}
+              style={segmentBtn(feedMode === "now")}
+              title="Only active specials"
+            >
+              {ICON_NOW} Happening Now
+            </button>
+            <button
+              type="button"
+              onClick={() => setFeedMode("upcoming")}
+              style={segmentBtn(feedMode === "upcoming")}
+              title="Active + later today"
+            >
+              {ICON_UPCOMING} Upcoming
+            </button>
+          </div>
+        </div>
+
+        {showFlashForm ? (
+          <div style={styles.formCard}>
+            <div style={styles.formTitle}>Post a Flash Special (same-day)</div>
+
+            <div style={styles.formGrid}>
+              {formField(
+                "Business name",
+                <input
+                  value={flashBusinessName}
+                  onChange={(e) => setFlashBusinessName(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "Street",
+                <input
+                  value={flashStreet}
+                  onChange={(e) => setFlashStreet(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "City",
+                <input
+                  value={flashCity}
+                  onChange={(e) => setFlashCity(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "State",
+                <input
+                  value={flashState}
+                  onChange={(e) => setFlashState(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "ZIP",
+                <input
+                  value={flashZip}
+                  onChange={(e) => setFlashZip(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "Duration (minutes)",
+                <input
+                  type="number"
+                  min={15}
+                  max={720}
+                  value={flashDurationMins}
+                  onChange={(e) =>
+                    setFlashDurationMins(parseInt(e.target.value || "120", 10))
+                  }
+                  style={styles.input}
+                />
+              )}
+              <div style={{ gridColumn: "1 / -1" }}>
+                {formField(
+                  "Special description",
+                  <input
+                    value={flashDescription}
+                    onChange={(e) => setFlashDescription(e.target.value)}
+                    placeholder='Example: "Extra wings — 8 for $10 until 5pm"'
+                    style={styles.input}
+                  />
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+              <button
+                onClick={addFlashSpecial}
+                disabled={flashPosting}
+                style={{ ...buttonStyle("flashsubmit", "primary"), opacity: flashPosting ? 0.6 : 1 }}
+                onMouseEnter={() => setHovered("flashsubmit")}
+                onMouseLeave={() => setHovered(null)}
+              >
+                {flashPosting ? "Posting..." : "Submit Flash"}
+              </button>
+
+              <button
+                onClick={() => setShowFlashForm(false)}
+                style={buttonStyle("flashcancel", "secondary")}
+                onMouseEnter={() => setHovered("flashcancel")}
+                onMouseLeave={() => setHovered(null)}
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div style={styles.microcopy}>
+              Flash Specials expire automatically. We use the address to drop a pin on the map.
+            </div>
+          </div>
+        ) : null}
+
+        {showWeeklyForm ? (
+          <div style={styles.formCard}>
+            <div style={styles.formTitle}>Post a Weekly Special (recurring)</div>
+
+            <div style={styles.formGrid}>
+              {formField(
+                "Business name",
+                <input
+                  value={weeklyBusinessName}
+                  onChange={(e) => setWeeklyBusinessName(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "Street",
+                <input
+                  value={weeklyStreet}
+                  onChange={(e) => setWeeklyStreet(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "City",
+                <input
+                  value={weeklyCity}
+                  onChange={(e) => setWeeklyCity(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "State",
+                <input
+                  value={weeklyState}
+                  onChange={(e) => setWeeklyState(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+              {formField(
+                "ZIP",
+                <input
+                  value={weeklyZip}
+                  onChange={(e) => setWeeklyZip(e.target.value)}
+                  style={styles.input}
+                />
+              )}
+
+              {formField(
+                "Day",
+                <select
+                  value={weeklyDay}
+                  onChange={(e) => setWeeklyDay(e.target.value as Weekday)}
+                  style={styles.select}
+                >
+                  {WEEKDAYS.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <TimePicker12 label="Start" value={weeklyStart12} onChange={setWeeklyStart12} />
+              <TimePicker12 label="End" value={weeklyEnd12} onChange={setWeeklyEnd12} />
+
+              <div style={{ gridColumn: "1 / -1", fontSize: 12, opacity: 0.9 }}>
+                You chose: <b>{prettyTime12(weeklyStart12)}</b> – <b>{prettyTime12(weeklyEnd12)}</b>
+                <span style={{ marginLeft: 8, opacity: 0.8 }}>(Overnight is allowed)</span>
+              </div>
+
+              <div style={{ gridColumn: "1 / -1" }}>
+                {formField(
+                  "Special description",
+                  <input
+                    value={weeklyDescription}
+                    onChange={(e) => setWeeklyDescription(e.target.value)}
+                    placeholder='Example: "Mexican Night — tacos + margarita special"'
+                    style={styles.input}
+                  />
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+              <button
+                onClick={addWeeklySpecial}
+                disabled={weeklyPosting}
+                style={{ ...buttonStyle("weeklysubmit", "primary"), opacity: weeklyPosting ? 0.6 : 1 }}
+                onMouseEnter={() => setHovered("weeklysubmit")}
+                onMouseLeave={() => setHovered(null)}
+              >
+                {weeklyPosting ? "Posting..." : "Submit Weekly"}
+              </button>
+
+              <button
+                onClick={() => setShowWeeklyForm(false)}
+                style={buttonStyle("weeklycancel", "secondary")}
+                onMouseEnter={() => setHovered("weeklycancel")}
+                onMouseLeave={() => setHovered(null)}
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div style={styles.microcopy}>
+              Weekly Specials show on the chosen weekday (and overnight tails show after midnight).
+            </div>
+          </div>
+        ) : null}
       </div>
 
-      {showMap ? (
-        <div style={styles.mapWrap}>
-          <div ref={mapElRef} style={styles.map} />
-        </div>
+      {/* MAP */}
+      {mapOn ? (
+        <div ref={mapContainerRef} className="cb-map" style={styles.map} />
       ) : (
-        <div style={styles.safeNote}>
-          Map is OFF (safe build mode). Turn it on whenever you want.
+        <div style={styles.mapOffNotice}>
+          Map is OFF (safe mode). Turn it on whenever you want.
         </div>
       )}
 
-      <div style={styles.list}>
-        {cards.length === 0 && !loading ? (
-          <div style={styles.empty}>
-            No results in this radius. Try “Anywhere” or clear search.
+      {/* TOP 5 */}
+      <div style={styles.section}>
+        <div style={styles.sectionHeaderRow}>
+          <div style={styles.sectionTitle}>Top 5 Near You</div>
+          <div style={styles.sectionMeta}>
+            <span style={{ opacity: 0.9 }}>{radiusLabel}</span>
+            <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
+            <span style={{ opacity: 0.85 }}>{categoryLabel}</span>
+            <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
+            <span style={{ opacity: 0.9 }}>{feedLabel}</span>
+            {searchTerm.trim() ? (
+              <>
+                <span style={{ opacity: 0.35, margin: "0 8px" }}>•</span>
+                <span style={{ opacity: 0.9 }}>
+                  Searching: <b>{searchTerm.trim()}</b>
+                </span>
+              </>
+            ) : null}
           </div>
-        ) : null}
+        </div>
 
-        {visibleCards.map((c, idx) => (
-          <Card key={c.key} c={c} idx={idx} />
+        {featuredFeed.length === 0 ? (
+          <div style={styles.card}>
+            <div style={styles.cardTitle}>No nearby specials right now</div>
+            <div style={styles.cardText}>
+              {searchTerm.trim()
+                ? "Try a different search word, or clear search."
+                : 'Try increasing your distance or tap "Use My Location".'}
+            </div>
+          </div>
+        ) : (
+          featuredFeed.map((g) => (
+            <GroupedCard key={g.key} group={g} featured={true} />
+          ))
+        )}
+      </div>
+
+      {/* ALL (PAGINATED 10) */}
+      <div style={styles.section}>
+        <div style={styles.sectionHeaderRow}>
+          <div style={styles.sectionTitle}>All Nearby</div>
+          <div style={styles.sectionMeta}>
+            Showing <b>{showingCount}</b> of <b>{groupedAllFeed.length}</b> restaurants
+          </div>
+        </div>
+
+        {pagedFeed.map((g) => (
+          <GroupedCard key={"all-" + g.key} group={g} featured={featuredKeys.has(g.key)} />
         ))}
 
-        {hasMore ? (
-          <button onClick={() => setPage((p) => p + 1)} style={styles.moreBtn}>
-            Load more (next {LOAD_MORE_STEP})
+        {groupedAllFeed.length > cardsToShow ? (
+          <button
+            onClick={() => setCardsToShow((n) => n + 10)}
+            style={styles.loadMore}
+          >
+            Load more (next 10)
           </button>
-        ) : cards.length > 0 ? (
-          <div style={styles.endCap}>That’s everything in range.</div>
         ) : null}
+      </div>
 
-        <div style={styles.footer}>Support: {SUPPORT_EMAIL}</div>
+      <div style={styles.footer}>
+        Closest deals show first (within your chosen distance). • Support:{" "}
+        <a href={"mailto:" + SUPPORT_EMAIL} style={{ color: "#f2f2f2", textDecoration: "underline" }}>
+          {SUPPORT_EMAIL}
+        </a>
       </div>
     </div>
   );
@@ -624,172 +2164,465 @@ export default function App() {
  *  ========================= */
 const styles: Record<string, React.CSSProperties> = {
   page: {
-    fontFamily:
-      'Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif',
-    background: "#0b0f14",
-    color: "#e8eef6",
     minHeight: "100vh",
+    paddingTop: "calc(16px + env(safe-area-inset-top))",
+    paddingLeft: "calc(16px + env(safe-area-inset-left))",
+    paddingRight: "calc(16px + env(safe-area-inset-right))",
+    paddingBottom: 16,
+    background:
+      "radial-gradient(1200px 700px at 20% -10%, rgba(0, 140, 255, 0.10), transparent 60%), #141414",
+    color: "#f2f2f2",
+    fontFamily:
+      '"Inter", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
+    letterSpacing: 0.1,
+    lineHeight: 1.35,
   },
   header: {
-    padding: 16,
-    borderBottom: "1px solid rgba(255,255,255,0.08)",
-    position: "sticky",
-    top: 0,
-    background: "rgba(11,15,20,0.92)",
-    backdropFilter: "blur(8px)",
-    zIndex: 10,
+    padding: 12,
+    borderRadius: 18,
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
+    border: "1px solid rgba(255,255,255,0.10)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+    marginBottom: 12,
   },
-  brandRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 },
-  brand: { fontWeight: 900, fontSize: 22, letterSpacing: 0.2 },
-  livePill: {
-    fontSize: 12,
+  title: {
+    fontSize: "clamp(28px, 8vw, 42px)",
     fontWeight: 900,
-    padding: "4px 8px",
-    borderRadius: 999,
-    background: LIVE_GREEN,
-    color: "#0b0f14",
-  },
-  controls: { display: "grid", gap: 10 },
-  row: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
-  search: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(255,255,255,0.06)",
-    color: "#e8eef6",
-    outline: "none",
-  },
-  btn: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(255,255,255,0.06)",
-    color: "#e8eef6",
-    cursor: "pointer",
-    fontWeight: 800,
-  },
-  btnGreen: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(34,197,94,0.55)",
-    background: "rgba(34,197,94,0.18)",
-    color: "#e8eef6",
-    cursor: "pointer",
-    fontWeight: 900,
-  },
-  select: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(255,255,255,0.06)",
-    color: "#e8eef6",
-    cursor: "pointer",
-    fontWeight: 800,
-  },
-  countPill: {
-    padding: "8px 10px",
-    borderRadius: 999,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(255,255,255,0.05)",
-    fontSize: 12,
-    opacity: 0.95,
-  },
-  error: {
-    padding: 10,
-    borderRadius: 10,
-    border: "1px solid rgba(239,68,68,0.35)",
-    background: "rgba(239,68,68,0.12)",
-    color: "#fecaca",
-    fontWeight: 800,
-  },
-  subtle: { fontSize: 12, opacity: 0.8 },
-  mapWrap: { padding: 16, paddingTop: 12 },
-  map: {
-    height: 320,
-    borderRadius: 16,
+    letterSpacing: 0.8,
+    lineHeight: 1,
+    fontFamily:
+      '"Permanent Marker", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
+    textShadow:
+      "0 2px 0 rgba(0,0,0,0.45), 0 6px 14px rgba(0,0,0,0.45), 0 16px 28px rgba(0,0,0,0.35)",
+    whiteSpace: "nowrap",
     overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  subtitle: { marginTop: 4, opacity: 0.92, fontSize: 13, lineHeight: 1.2 },
+
+  controlsShell: {
+    padding: 12,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.10)",
+    boxShadow: "0 10px 26px rgba(0,0,0,0.28)",
+    marginBottom: 12,
+  },
+  controlsRow: {
+    display: "flex",
+    gap: 12,
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+  },
+  groupLeft: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  groupRight: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+
+  categoryRow: {
+    display: "flex",
+    gap: 8,
+    overflowX: "auto",
+    overflowY: "hidden",
+    flexWrap: "nowrap",
+    padding: "6px 2px 10px",
+    WebkitOverflowScrolling: "touch",
+    scrollbarWidth: "none",
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    marginBottom: 10,
+  },
+
+  controlsFooterRow: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    marginTop: 10,
+    paddingTop: 10,
+  },
+
+  field: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "8px 10px",
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.045)",
     border: "1px solid rgba(255,255,255,0.10)",
   },
-  safeNote: {
-    margin: 16,
-    padding: 12,
+
+  searchField: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "8px 10px",
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.045)",
+    border: "1px solid rgba(255,255,255,0.10)",
+    minWidth: 0,
+    flex: "1 1 320px",
+  },
+
+  label: {
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: 0.9,
+    textTransform: "uppercase",
+    opacity: 0.85,
+    whiteSpace: "nowrap",
+  },
+
+  select: {
+    background: "rgba(20,20,20,0.35)",
+    color: "#f2f2f2",
+    border: "1px solid rgba(255,255,255,0.18)",
+    borderRadius: 12,
+    padding: "8px 10px",
+    outline: "none",
+    fontWeight: 650,
+    letterSpacing: 0.1,
+    fontSize: 13,
+  },
+
+  input: {
+    background: "rgba(20,20,20,0.35)",
+    color: "#f2f2f2",
+    border: "1px solid rgba(255,255,255,0.18)",
     borderRadius: 14,
-    border: "1px dashed rgba(255,255,255,0.16)",
+    padding: "10px 12px",
+    outline: "none",
+    fontWeight: 500,
+    width: "100%",
+    boxSizing: "border-box",
+    fontSize: 14,
+  },
+
+  searchInput: {
+    background: "rgba(20,20,20,0.35)",
+    color: "#f2f2f2",
+    border: "1px solid rgba(255,255,255,0.18)",
+    borderRadius: 12,
+    padding: "8px 10px",
+    outline: "none",
+    fontWeight: 650,
+    letterSpacing: 0.1,
+    width: "100%",
+    minWidth: 0,
+    fontSize: 13,
+  },
+
+  buttonBase: {
+    padding: "9px 12px",
+    borderRadius: 13,
+    color: "#f2f2f2",
+    cursor: "pointer",
+    fontWeight: 800,
+    letterSpacing: 0.15,
+    lineHeight: 1,
+    whiteSpace: "nowrap",
+    transition: "transform 140ms ease, box-shadow 140ms ease, filter 140ms ease",
+    userSelect: "none",
+    fontSize: 13,
+  },
+
+  segmentWrap: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    flexWrap: "wrap",
+    padding: "8px 10px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.045)",
+    border: "1px solid rgba(255,255,255,0.10)",
+  },
+  segmentBtn: {
+    padding: "9px 12px",
+    borderRadius: 999,
+    color: "#f2f2f2",
+    cursor: "pointer",
+    fontWeight: 900,
+    letterSpacing: 0.15,
+    lineHeight: 1,
+    whiteSpace: "nowrap",
+    transition: "transform 140ms ease, box-shadow 140ms ease, filter 140ms ease",
+    userSelect: "none",
+    fontSize: 13,
+  },
+
+  map: {
+    height: 280,
+    borderRadius: 18,
+    marginBottom: 12,
+    border: "1px solid rgba(255,255,255,0.10)",
+    boxShadow: "0 14px 34px rgba(0,0,0,0.45)",
+    overflow: "hidden",
+  },
+
+  mapOffNotice: {
+    borderRadius: 18,
+    marginBottom: 12,
+    border: "1px dashed rgba(255,255,255,0.18)",
     background: "rgba(255,255,255,0.04)",
+    padding: 14,
     opacity: 0.9,
   },
-  list: { padding: 16, display: "grid", gap: 12 },
+
+  section: { marginTop: 12 },
+  sectionHeaderRow: {
+    display: "flex",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: 10,
+    flexWrap: "wrap",
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 850,
+    opacity: 0.98,
+    letterSpacing: 0.2,
+  },
+  sectionMeta: { fontSize: 12, opacity: 0.85 },
 
   card: {
     padding: 14,
-    borderRadius: 16,
+    borderRadius: 18,
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
     border: "1px solid rgba(255,255,255,0.10)",
-    background: "rgba(255,255,255,0.04)",
+    marginBottom: 10,
+    boxShadow: "0 10px 26px rgba(0,0,0,0.30)",
   },
+
+  // Featured outline uses the same “LIVE green” vibe
   cardFeatured: {
     padding: 14,
-    borderRadius: 16,
-    border: "2px solid rgba(34,197,94,0.65)",
-    background: "rgba(255,255,255,0.04)",
-    boxShadow: "0 0 0 2px rgba(34,197,94,0.10) inset",
+    borderRadius: 18,
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
+    border: "2px solid rgba(0, 255, 140, 0.55)",
+    marginBottom: 10,
+    boxShadow: "0 0 0 3px rgba(0, 255, 140, 0.10), 0 10px 26px rgba(0,0,0,0.30)",
   },
-  cardTop: { display: "flex", justifyContent: "space-between", gap: 12 },
-  cardTitleRow: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
-  cardTitle: { fontSize: 16, fontWeight: 900 },
-  top5Pill: {
-    fontSize: 11,
-    fontWeight: 950,
-    padding: "4px 8px",
+
+  cardTop: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  cardTitleRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+
+  featuredPill: {
+    padding: "5px 10px",
     borderRadius: 999,
-    border: "1px solid rgba(34,197,94,0.55)",
-    background: "rgba(34,197,94,0.14)",
-  },
-  addr: { fontSize: 13, opacity: 0.9, marginTop: 4 },
-  dist: { fontSize: 12, opacity: 0.9, whiteSpace: "nowrap", marginTop: 2 },
-
-  specials: { marginTop: 12, display: "grid", gap: 10 },
-  specialRow: {
-    padding: 10,
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "rgba(255,255,255,0.03)",
-  },
-  specialLabel: { fontSize: 12, fontWeight: 900, opacity: 0.95 },
-  specialDeal: { fontSize: 14, fontWeight: 800, marginTop: 4 },
-  specialSub: { fontSize: 12, opacity: 0.85, marginTop: 4 },
-
-  links: { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 },
-  linkBtn: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(255,255,255,0.06)",
-    color: "#e8eef6",
-    textDecoration: "none",
+    fontSize: 11,
     fontWeight: 900,
-  },
-  linkGhost: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "transparent",
-    color: "#e8eef6",
-    textDecoration: "none",
-    fontWeight: 900,
-    opacity: 0.9,
+    letterSpacing: 0.6,
+    background: "rgba(0, 255, 140, 0.14)",
+    border: "1px solid rgba(0, 255, 140, 0.34)",
+    color: "#dfffee",
   },
 
-  moreBtn: {
-    padding: "12px 14px",
-    borderRadius: 12,
+  cardTitle: { fontSize: 16, fontWeight: 850 },
+  cardSubtle: { fontSize: 12, opacity: 0.82, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+
+  cardText: { marginTop: 6, fontSize: 14.5, lineHeight: 1.45, opacity: 0.98 },
+  microcopy: { marginTop: 10, fontSize: 12, opacity: 0.78, lineHeight: 1.4 },
+
+  badgeActive: {
+    padding: "5px 9px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 0.6,
+    background: "rgba(0, 255, 140, 0.16)",
+    border: "1px solid rgba(0, 255, 140, 0.28)",
+  },
+  badgeLater: {
+    padding: "5px 9px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 0.6,
+    background: "rgba(255, 210, 0, 0.14)",
+    border: "1px solid rgba(255, 210, 0, 0.26)",
+  },
+  badgeFlash: {
+    padding: "5px 9px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 0.6,
+    background: "rgba(0, 140, 255, 0.14)",
+    border: "1px solid rgba(0, 140, 255, 0.28)",
+  },
+
+  mapLink: {
+    display: "inline-block",
+    padding: "9px 12px",
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.07)",
     border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(255,255,255,0.06)",
-    color: "#e8eef6",
-    cursor: "pointer",
-    fontWeight: 950,
+    color: "#f2f2f2",
+    textDecoration: "none",
+    fontWeight: 850,
+    letterSpacing: 0.2,
+    fontSize: 13,
   },
-  endCap: { fontSize: 12, opacity: 0.75, paddingTop: 2 },
-  empty: { padding: 14, borderRadius: 12, opacity: 0.85 },
-  footer: { marginTop: 10, fontSize: 12, opacity: 0.75 },
+
+  reportLink: {
+    display: "inline-block",
+    padding: "9px 12px",
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    color: "#f2f2f2",
+    textDecoration: "none",
+    fontWeight: 850,
+    letterSpacing: 0.2,
+    fontSize: 13,
+    opacity: 0.95,
+  },
+
+  footer: { marginTop: 16, opacity: 0.72, fontSize: 12, lineHeight: 1.4 },
+
+  formCard: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.045)",
+    border: "1px solid rgba(255,255,255,0.10)",
+    boxShadow: "0 10px 26px rgba(0,0,0,0.25)",
+  },
+  formTitle: {
+    fontSize: 14,
+    fontWeight: 900,
+    letterSpacing: 0.3,
+    marginBottom: 10,
+  },
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 10,
+  },
+
+  blockHeader: {
+    fontSize: 12,
+    fontWeight: 900,
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+    opacity: 0.9,
+    marginBottom: 8,
+  },
+
+  specialRow: {
+    display: "flex",
+    gap: 10,
+    alignItems: "flex-start",
+    padding: 12,
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.10)",
+  },
+
+  specialTagWeekly: {
+    flex: "0 0 auto",
+    padding: "6px 10px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 0.5,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    opacity: 0.95,
+  },
+
+  specialTagFlash: {
+    flex: "0 0 auto",
+    padding: "6px 10px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 0.5,
+    background: "rgba(0, 140, 255, 0.14)",
+    border: "1px solid rgba(0, 140, 255, 0.26)",
+  },
+
+  specialText: {
+    fontSize: 14,
+    fontWeight: 750,
+    lineHeight: 1.35,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+
+  specialMeta: {
+    marginTop: 4,
+    fontSize: 12,
+    opacity: 0.82,
+  },
+
+  dotActive: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    background: "rgba(0,255,140,0.85)",
+    boxShadow: "0 0 0 3px rgba(0,255,140,0.12)",
+    marginTop: 2,
+  },
+
+  dotLater: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    background: "rgba(255,210,0,0.85)",
+    boxShadow: "0 0 0 3px rgba(255,210,0,0.10)",
+    marginTop: 2,
+  },
+
+  loadMore: {
+    width: "100%",
+    marginTop: 10,
+    padding: "14px 12px",
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    color: "#f2f2f2",
+    cursor: "pointer",
+    fontWeight: 900,
+    letterSpacing: 0.2,
+    boxShadow: "0 10px 22px rgba(0,0,0,0.22)",
+  },
+
+  smallCounterPill: {
+    padding: "9px 12px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.10)",
+    fontWeight: 900,
+    fontSize: 12,
+    opacity: 0.9,
+    letterSpacing: 0.15,
+    whiteSpace: "nowrap",
+  },
 };
+```
