@@ -415,17 +415,7 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "bacon",
     "bagel",
   ],
-  beer: [
-    "beer",
-    "draft",
-    "pint",
-    "ipa",
-    "lager",
-    "brew",
-    "brewery",
-    "bucket",
-    "pitcher",
-  ],
+  beer: ["beer", "draft", "pint", "ipa", "lager", "brew", "brewery", "bucket", "pitcher"],
   cocktails: [
     "drink",
     "drinks",
@@ -440,46 +430,11 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "wine",
     "sangria",
   ],
-  coffee: [
-    "coffee",
-    "espresso",
-    "latte",
-    "cappuccino",
-    "cafe",
-    "iced coffee",
-    "cold brew",
-  ],
-  dessert: [
-    "dessert",
-    "ice cream",
-    "gelato",
-    "cake",
-    "brownie",
-    "cookie",
-    "donut",
-    "cannoli",
-    "cheesecake",
-  ],
+  coffee: ["coffee", "espresso", "latte", "cappuccino", "cafe", "iced coffee", "cold brew"],
+  dessert: ["dessert", "ice cream", "gelato", "cake", "brownie", "cookie", "donut", "cannoli", "cheesecake"],
   happyhour: ["happy hour", "hh", "2-for-1", "two for one", "bogo", "half off"],
-  latenight: [
-    "late night",
-    "after 9",
-    "after 10",
-    "after 11",
-    "midnight",
-    "kitchen open late",
-  ],
-  barfood: [
-    "bar food",
-    "apps",
-    "appetizer",
-    "nachos",
-    "sliders",
-    "wings",
-    "fries",
-    "pub",
-    "tavern",
-  ],
+  latenight: ["late night", "after 9", "after 10", "after 11", "midnight", "kitchen open late"],
+  barfood: ["bar food", "apps", "appetizer", "nachos", "sliders", "wings", "fries", "pub", "tavern"],
 };
 
 function matchesCategory(
@@ -592,12 +547,7 @@ function normLower(x: any): string {
 function isApprovedStatus(status: any): boolean {
   if (status == null) return true;
   const s = normLower(status);
-  return (
-    s === "approved" ||
-    s === "approve" ||
-    s === "live" ||
-    s === "published"
-  );
+  return s === "approved" || s === "approve" || s === "live" || s === "published";
 }
 
 function isFlashType(t: any): boolean {
@@ -909,7 +859,8 @@ export default function App() {
   const markersRef = useRef<L.Marker[]>([]);
   const userMarkerRef = useRef<L.Marker | null>(null);
 
-  const [feedMode, setFeedMode] = useState<FeedMode>("upcoming");
+  /** ✅ CHANGE #1: default is Happening Now */
+  const [feedMode, setFeedMode] = useState<FeedMode>("now");
   const showLaterToday = feedMode === "upcoming";
 
   const [radius, setRadius] = useState(10);
@@ -1273,7 +1224,7 @@ export default function App() {
         (x) => `weekly|${x.description}|${x.start}|${x.end}|${x.status}`
       );
 
-      // keep a stable, readable order inside card
+      // stable order inside card
       g.flashItems.sort((a, b) => a.expiresInMinutes - b.expiresInMinutes);
       g.regularItems.sort((a, b) => {
         if (a.status !== b.status) return a.status === "active" ? -1 : 1;
@@ -1283,10 +1234,9 @@ export default function App() {
 
     const list = Array.from(map.values());
 
-    // Sort by distance first (global)
+    // Sort by distance first
     list.sort((a, b) => {
       if (a.distance !== b.distance) return a.distance - b.distance;
-      // tie breaker: active first
       if (a.hasActive !== b.hasActive) return a.hasActive ? -1 : 1;
       return a.businessName.localeCompare(b.businessName);
     });
@@ -1294,16 +1244,13 @@ export default function App() {
     return list;
   }, [visibleTodayRows, activeFlashInRadius, timeTick]);
 
-  // Top 5 (closest first)
   const groupedTopFeed = useMemo(() => groupedAllFeed.slice(0, 5), [groupedAllFeed]);
 
-  // All Nearby excludes the top 5 entirely (no repeats)
   const groupedAllExceptTop = useMemo(() => {
     const topKeys = new Set(groupedTopFeed.map((g) => g.key));
     return groupedAllFeed.filter((g) => !topKeys.has(g.key));
   }, [groupedAllFeed, groupedTopFeed]);
 
-  /** Pagination for All Nearby (excluded) */
   const [pageSize, setPageSize] = useState(10);
   useEffect(() => {
     setPageSize(10);
@@ -1314,7 +1261,7 @@ export default function App() {
   }, [groupedAllExceptTop, pageSize]);
 
   /** =========================
-   *  MAP: ALWAYS ON
+   *  MAP
    *  ========================= */
   useEffect(() => {
     if (mapContainerRef.current && !mapRef.current) {
@@ -1332,13 +1279,11 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // keep map centered when userLocation changes
   useEffect(() => {
     if (!mapRef.current) return;
     mapRef.current.setView([userLocation.lat, userLocation.lng], 12);
   }, [userLocation.lat, userLocation.lng]);
 
-  // update markers based on groupedAllFeed
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -1408,7 +1353,6 @@ export default function App() {
     }
   }, [groupedAllFeed, wingIcon]);
 
-  /** Locate me */
   const handleLocateMe = () => {
     if (!("geolocation" in navigator)) {
       alert("Geolocation is not supported by your browser");
@@ -1536,15 +1480,7 @@ export default function App() {
     const description = weeklyDescription.trim();
     const day = weeklyDay;
 
-    if (
-      !typedName ||
-      !street ||
-      !city ||
-      !state ||
-      !zip ||
-      !description ||
-      !day
-    ) {
+    if (!typedName || !street || !city || !state || !zip || !description || !day) {
       alert("Please fill in ALL fields (name, address, day, time window, special).");
       return;
     }
@@ -1619,7 +1555,6 @@ export default function App() {
     alert("Submitted for approval ✅ (pending)");
   };
 
-  /** Expanded cards */
   const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
   const toggleExpand = (key: string) =>
     setExpandedKeys((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -1645,8 +1580,8 @@ export default function App() {
             <div style={styles.title}>Chalkboards</div>
 
             <div style={styles.subtitle}>
-              Digital Restaurant Chalkboards + Live Local Specials • <b>{today}</b>{" "}
-              • {format12Hour(new Date())} •{" "}
+              Digital Restaurant Chalkboards + Live Local Specials • <b>{today}</b> •{" "}
+              {format12Hour(new Date())} •{" "}
               {dbStatus === "ok" ? (
                 <span
                   onClick={() => setReloadTick((x) => x + 1)}
@@ -1682,7 +1617,8 @@ export default function App() {
           style={styles.categoryRow}
           onWheel={(e: React.WheelEvent<HTMLDivElement>) => {
             const el = e.currentTarget;
-            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) el.scrollLeft += e.deltaY;
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX))
+              el.scrollLeft += e.deltaY;
             else el.scrollLeft += e.deltaX;
           }}
         >
@@ -1703,7 +1639,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* CONTROLS PODS (separated) */}
+      {/* CONTROLS PODS (Filters + Mode only) */}
       <div style={styles.controlsGrid}>
         <div style={styles.pod}>
           <div style={styles.podTitle}>Filters</div>
@@ -1733,7 +1669,10 @@ export default function App() {
                 style={styles.searchInput}
               />
               {searchTerm.trim() && (
-                <button onClick={() => setSearchTerm("")} style={styles.btnSecondary}>
+                <button
+                  onClick={() => setSearchTerm("")}
+                  style={styles.btnSecondary}
+                >
                   Clear
                 </button>
               )}
@@ -1772,28 +1711,29 @@ export default function App() {
             </button>
           </div>
         </div>
-
-        <div style={styles.pod}>
-          <div style={styles.podTitle}>Post</div>
-          <div style={styles.podRow}>
-            <button
-              onClick={() => setShowFlashForm((v) => !v)}
-              style={styles.btnPrimarySmall}
-            >
-              {showFlashForm ? "Close Flash" : "Post Flash"}
-            </button>
-            <button
-              onClick={() => setShowWeeklyForm((v) => !v)}
-              style={styles.btnSmall}
-            >
-              {showWeeklyForm ? "Close Weekly" : "Post Weekly"}
-            </button>
-          </div>
-        </div>
       </div>
 
-      {/* MAP (always visible) */}
+      {/* ✅ CHANGE #2: MAP ABOVE POST */}
       <div ref={mapContainerRef} style={styles.map} />
+
+      {/* POST POD (now below map) */}
+      <div style={styles.pod}>
+        <div style={styles.podTitle}>Post</div>
+        <div style={styles.podRow}>
+          <button
+            onClick={() => setShowFlashForm((v) => !v)}
+            style={styles.btnPrimarySmall}
+          >
+            {showFlashForm ? "Close Flash" : "Post Flash"}
+          </button>
+          <button
+            onClick={() => setShowWeeklyForm((v) => !v)}
+            style={styles.btnSmall}
+          >
+            {showWeeklyForm ? "Close Weekly" : "Post Weekly"}
+          </button>
+        </div>
+      </div>
 
       {/* FORMS */}
       {showFlashForm && (
@@ -1877,7 +1817,10 @@ export default function App() {
             >
               {flashPosting ? "Posting..." : "Submit Flash"}
             </button>
-            <button onClick={() => setShowFlashForm(false)} style={styles.btnSecondary}>
+            <button
+              onClick={() => setShowFlashForm(false)}
+              style={styles.btnSecondary}
+            >
               Cancel
             </button>
           </div>
@@ -1947,8 +1890,16 @@ export default function App() {
               </select>
             </div>
 
-            <TimePicker12 label="Start" value={weeklyStart12} onChange={setWeeklyStart12} />
-            <TimePicker12 label="End" value={weeklyEnd12} onChange={setWeeklyEnd12} />
+            <TimePicker12
+              label="Start"
+              value={weeklyStart12}
+              onChange={setWeeklyStart12}
+            />
+            <TimePicker12
+              label="End"
+              value={weeklyEnd12}
+              onChange={setWeeklyEnd12}
+            />
 
             <div style={{ gridColumn: "1 / -1", fontSize: 12, opacity: 0.9 }}>
               You chose: <b>{prettyTime12(weeklyStart12)}</b> –{" "}
@@ -1980,12 +1931,17 @@ export default function App() {
             >
               {weeklyPosting ? "Posting..." : "Submit Weekly"}
             </button>
-            <button onClick={() => setShowWeeklyForm(false)} style={styles.btnSecondary}>
+            <button
+              onClick={() => setShowWeeklyForm(false)}
+              style={styles.btnSecondary}
+            >
               Cancel
             </button>
           </div>
 
-          <div style={styles.microcopy}>Weekly Specials show on the chosen weekday.</div>
+          <div style={styles.microcopy}>
+            Weekly Specials show on the chosen weekday.
+          </div>
         </div>
       )}
 
@@ -1998,7 +1954,10 @@ export default function App() {
             {category === "all"
               ? "All categories"
               : CATEGORIES.find((c) => c.key === category)?.label}{" "}
-            • {feedMode === "now" ? `${ICON_NOW} Happening Now` : `${ICON_UPCOMING} Upcoming`}
+            •{" "}
+            {feedMode === "now"
+              ? `${ICON_NOW} Happening Now`
+              : `${ICON_UPCOMING} Upcoming`}
           </div>
         </div>
 
@@ -2029,7 +1988,8 @@ export default function App() {
         <div style={styles.sectionHeaderRow}>
           <div style={styles.sectionTitle}>All Nearby</div>
           <div style={styles.sectionMeta}>
-            Showing <b>{visibleFullFeed.length}</b> / <b>{groupedAllExceptTop.length}</b>
+            Showing <b>{visibleFullFeed.length}</b> /{" "}
+            <b>{groupedAllExceptTop.length}</b>
           </div>
         </div>
 
@@ -2046,7 +2006,9 @@ export default function App() {
         {visibleFullFeed.length < groupedAllExceptTop.length && (
           <button
             onClick={() =>
-              setPageSize((n) => Math.min(groupedAllExceptTop.length, n + 10))
+              setPageSize((n) =>
+                Math.min(groupedAllExceptTop.length, n + 10)
+              )
             }
             style={styles.loadMoreBtn}
           >
@@ -2069,7 +2031,7 @@ export default function App() {
 }
 
 /** =========================
- *  STYLES (tight + uniform spacing)
+ *  STYLES
  *  ========================= */
 const styles: Record<string, React.CSSProperties> = {
   page: {
@@ -2111,7 +2073,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   subtitle: { marginTop: 4, opacity: 0.92, fontSize: 13, lineHeight: 1.2 },
 
-  // pods (TIGHT + UNIFORM)
   pod: {
     padding: 10,
     borderRadius: 18,
@@ -2341,12 +2302,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 6,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 900,
-    opacity: 0.98,
-    letterSpacing: 0.2,
-  },
+  sectionTitle: { fontSize: 16, fontWeight: 900, opacity: 0.98, letterSpacing: 0.2 },
   sectionMeta: { fontSize: 12, opacity: 0.85 },
 
   card: {
@@ -2359,7 +2315,6 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 10px 26px rgba(0,0,0,0.30)",
   },
 
-  // green-highlight Top 5 cards
   cardTop5: {
     padding: 14,
     borderRadius: 18,
@@ -2422,12 +2377,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 10,
   },
 
-  cardActions: {
-    marginTop: 12,
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-  },
+  cardActions: { marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" },
   mapLink: {
     display: "inline-block",
     padding: "9px 12px",
@@ -2476,12 +2426,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.10)",
     boxShadow: "0 10px 26px rgba(0,0,0,0.25)",
   },
-  formTitle: {
-    fontSize: 14,
-    fontWeight: 900,
-    letterSpacing: 0.3,
-    marginBottom: 10,
-  },
+  formTitle: { fontSize: 14, fontWeight: 900, letterSpacing: 0.3, marginBottom: 10 },
   formGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
