@@ -1619,7 +1619,7 @@ export default function App() {
             <div style={styles.title}>Chalkboards</div>
 
             <div style={styles.subtitle}>
-              Live Local Specials • <b>{today}</b> • {format12Hour(new Date())} •{" "}
+              Digital Chalkboards + Live Local Specials • <b>{today}</b> • {format12Hour(new Date())} •{" "}
               {dbStatus === "ok" ? (
                 <span
                   onClick={() => setReloadTick((x) => x + 1)}
