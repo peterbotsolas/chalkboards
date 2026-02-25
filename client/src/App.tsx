@@ -37,11 +37,11 @@ type Special = {
   deal: string;
   lat: number;
   lng: number;
-  // weekly meta (optional)
+  // weekly meta
   day?: string;
-  start?: string; // "HH:MM"
-  end?: string; // "HH:MM"
-  // flash meta (optional)
+  start?: string;
+  end?: string;
+  // flash meta
   expiresAt?: number;
 };
 
@@ -65,7 +65,7 @@ function normLower(x: any) {
 }
 
 function isApprovedStatus(status: any): boolean {
-  if (status == null) return true; // legacy rows
+  if (status == null) return true;
   const s = normLower(status);
   return s === "approved" || s === "live" || s === "published";
 }
@@ -202,8 +202,6 @@ function rowsToSpecials(rows: DbRow[]): Special[] {
       if (!r.expires_at) continue;
       const expiresAt = new Date(r.expires_at).getTime();
       if (!Number.isFinite(expiresAt)) continue;
-
-      // only keep active flashes
       if (Date.now() > expiresAt) continue;
 
       out.push({
@@ -248,7 +246,7 @@ function nowMinutes() {
 }
 
 /** =========================
- *  APP (DEFAULT EXPORT ✅)
+ *  APP
  *  ========================= */
 export default function App() {
   const PAGE_SIZE = 10;
@@ -257,18 +255,20 @@ export default function App() {
   const mapElRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
 
-  const [showMap, setShowMap] = useState(false); // safe mode default
+  const [showMap, setShowMap] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
 
   const [search, setSearch] = useState("");
   const [radius, setRadius] = useState(10);
+
+  // pagination is for "beyond top 5"
   const [page, setPage] = useState(1);
 
   const [user, setUser] = useState({ lat: 40.88, lng: -74.07 });
   const [specials, setSpecials] = useState<Special[]>([]);
 
-  // get user location
+  // user location
   useEffect(() => {
     if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
@@ -278,7 +278,7 @@ export default function App() {
     );
   }, []);
 
-  // load from supabase (and refresh every 30 seconds)
+  // load supabase
   useEffect(() => {
     let cancel = false;
 
@@ -290,7 +290,7 @@ export default function App() {
         .from("specials")
         .select("id, created_at, type, business_name, deal, address, expires_at, status, extra, lat, lng")
         .order("created_at", { ascending: false })
-        .limit(1000);
+        .limit(1200);
 
       if (cancel) return;
 
@@ -301,8 +301,7 @@ export default function App() {
         return;
       }
 
-      const rows = (data ?? []) as DbRow[];
-      setSpecials(rowsToSpecials(rows));
+      setSpecials(rowsToSpecials((data ?? []) as DbRow[]));
       setLoading(false);
     }
 
@@ -319,11 +318,10 @@ export default function App() {
     setPage(1);
   }, [search, radius, user.lat, user.lng]);
 
+  // Build restaurant cards (ALL specials per address)
   const cards = useMemo((): RestaurantCard[] => {
     const q = search.trim().toLowerCase();
     const nowM = nowMinutes();
-
-    // group by normalized address
     const map = new Map<string, RestaurantCard>();
 
     for (const s of specials) {
@@ -367,16 +365,15 @@ export default function App() {
         const crosses = endMraw <= startM;
         const endM = crosses ? endMraw + 24 * 60 : endMraw;
 
-        const active =
-          s.day &&
-          typeof s.start === "string" &&
-          typeof s.end === "string" &&
-          (() => {
-            // active status only for "today" specials; but we still show all weekly entries on the card
-            // (we're not hiding anything inside the card anymore)
-            // you can later tighten this if you want.
-            return nowM >= startM && (crosses ? nowM <= endM - 24 * 60 : nowM <= endM);
-          })();
+        // note: we DO NOT hide weekly specials — we show them all.
+        // We only add an ACTIVE tag for readability.
+        const active = (() => {
+          const cur = nowM;
+          if (!s.start || !s.end) return false;
+          if (!crosses) return cur >= startM && cur <= endM;
+          // overnight: treat as active if after start OR before end
+          return cur >= startM || cur <= endMraw;
+        })();
 
         g.specials.push({
           kind: "weekly",
@@ -389,13 +386,35 @@ export default function App() {
 
     const list = Array.from(map.values());
 
-    // sort restaurants by distance (discovery order)
+    // Sort restaurants by distance = true discovery
     list.sort((a, b) => a.distance - b.distance);
 
-    // inside each restaurant: flash first, then weekly (stable)
+    // Sort specials within a restaurant (flash first, then weekly by day/time)
+    const dayRank: Record<string, number> = {
+      Sunday: 0,
+      Monday: 1,
+      Tuesday: 2,
+      Wednesday: 3,
+      Thursday: 4,
+      Friday: 5,
+      Saturday: 6,
+    };
+
     list.forEach((c) => {
       c.specials.sort((a, b) => {
         if (a.kind !== b.kind) return a.kind === "flash" ? -1 : 1;
+
+        const aIsWeekly = a.kind === "weekly";
+        const bIsWeekly = b.kind === "weekly";
+
+        if (aIsWeekly && bIsWeekly) {
+          const aDay = a.label.replace("🗓️ WEEKLY • ", "");
+          const bDay = b.label.replace("🗓️ WEEKLY • ", "");
+          const ra = dayRank[aDay] ?? 99;
+          const rb = dayRank[bDay] ?? 99;
+          if (ra !== rb) return ra - rb;
+        }
+
         return a.deal.localeCompare(b.deal);
       });
     });
@@ -403,11 +422,16 @@ export default function App() {
     return list;
   }, [specials, user.lat, user.lng, radius, search]);
 
-  const top5Keys = useMemo(() => new Set(cards.slice(0, 5).map((c) => c.key)), [cards]);
+  // Top 5 gets featured outline and always shown
+  const top5 = useMemo(() => cards.slice(0, 5), [cards]);
+  const rest = useMemo(() => cards.slice(5), [cards]);
 
-  const visibleCards = useMemo(() => cards.slice(0, page * PAGE_SIZE), [cards, page]);
+  // Pagination applies ONLY to the rest list
+  const visibleRest = useMemo(() => rest.slice(0, page * PAGE_SIZE), [rest, page]);
 
-  // map init when enabled
+  const hasMore = visibleRest.length < rest.length;
+
+  // Map init (only when ON)
   useEffect(() => {
     if (!showMap) return;
     if (!mapElRef.current) return;
@@ -428,21 +452,34 @@ export default function App() {
     };
   }, [showMap, user.lat, user.lng]);
 
-  // map markers refresh
+  // Important: when map turns ON, Leaflet needs a resize kick
+  useEffect(() => {
+    if (!showMap) return;
+    const t = setTimeout(() => {
+      if (mapRef.current) {
+        mapRef.current.invalidateSize();
+        mapRef.current.setView([user.lat, user.lng], 12);
+      }
+    }, 120);
+    return () => clearTimeout(t);
+  }, [showMap, user.lat, user.lng]);
+
+  // Map markers reflect top 5 + visible rest (the cards the user can see)
   useEffect(() => {
     if (!showMap) return;
     if (!mapRef.current) return;
+
+    const visible = [...top5, ...visibleRest];
 
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
     mapRef.current.setView([user.lat, user.lng], 12);
 
-    // user marker
     const userMarker = L.marker([user.lat, user.lng]).addTo(mapRef.current);
     markersRef.current.push(userMarker);
 
-    visibleCards.forEach((c) => {
+    visible.forEach((c) => {
       const html =
         "<b>" +
         c.businessName +
@@ -450,7 +487,7 @@ export default function App() {
         c.address +
         "<br/><br/>" +
         c.specials
-          .slice(0, 6)
+          .slice(0, 10)
           .map((s) => s.label + "<br/>" + s.deal + "<br/><i>" + s.sub + "</i>")
           .join("<br/><br/>") +
         '<br/><br/><a href="' +
@@ -460,9 +497,48 @@ export default function App() {
       const m = L.marker([c.lat, c.lng]).addTo(mapRef.current!).bindPopup(html);
       markersRef.current.push(m);
     });
-  }, [showMap, visibleCards, user.lat, user.lng]);
+  }, [showMap, top5, visibleRest, user.lat, user.lng]);
 
-  const hasMore = visibleCards.length < cards.length;
+  const totalShown = top5.length + visibleRest.length;
+  const totalCards = cards.length;
+
+  const Card = ({ c, featured }: { c: RestaurantCard; featured: boolean }) => {
+    const distText = c.distance >= 999999 ? "" : c.distance.toFixed(1) + " mi";
+
+    return (
+      <div style={featured ? styles.cardFeatured : styles.card}>
+        <div style={styles.cardTop}>
+          <div style={{ minWidth: 0 }}>
+            <div style={styles.cardTitleRow}>
+              <div style={styles.cardTitle}>{c.businessName}</div>
+              {featured ? <div style={styles.top5Pill}>TOP 5 NEAR YOU</div> : null}
+            </div>
+            <div style={styles.addr}>{c.address}</div>
+          </div>
+          <div style={styles.dist}>{distText}</div>
+        </div>
+
+        <div style={styles.specials}>
+          {c.specials.map((s, idx) => (
+            <div key={c.key + "-" + idx} style={styles.specialRow}>
+              <div style={styles.specialLabel}>{s.label}</div>
+              <div style={styles.specialDeal}>{s.deal}</div>
+              <div style={styles.specialSub}>{s.sub}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={styles.links}>
+          <a href={mapsUrl(c.address)} target="_blank" rel="noopener noreferrer" style={styles.linkBtn}>
+            Open in Maps
+          </a>
+          <a href={makeReportMailto(c.businessName, c.address)} style={styles.linkGhost}>
+            Report issue
+          </a>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div style={styles.page}>
@@ -493,17 +569,17 @@ export default function App() {
               {showMap ? "Map: ON" : "Map: OFF"}
             </button>
 
-            <select
-              value={radius}
-              onChange={(e) => setRadius(parseInt(e.target.value, 10))}
-              style={styles.select}
-              title="Radius"
-            >
+            <select value={radius} onChange={(e) => setRadius(parseInt(e.target.value, 10))} style={styles.select}>
               <option value={5}>5 mi</option>
               <option value={10}>10 mi</option>
               <option value={20}>20 mi</option>
               <option value={50}>50 mi</option>
+              <option value={999}>Anywhere</option>
             </select>
+
+            <div style={styles.countPill}>
+              Showing <b>{totalShown}</b> / {totalCards}
+            </div>
           </div>
 
           {errorText ? <div style={styles.error}>{errorText}</div> : null}
@@ -517,57 +593,45 @@ export default function App() {
         </div>
       ) : (
         <div style={styles.safeNote}>
-          Map is OFF (safe build mode). Turn it on after Vercel build is stable.
+          Map is OFF (safe build mode). Turn it on whenever you want.
         </div>
       )}
 
       <div style={styles.list}>
-        {visibleCards.map((c) => {
-          const featured = top5Keys.has(c.key);
-          const distText = c.distance >= 999999 ? "" : c.distance.toFixed(1) + " mi";
-          return (
-            <div key={c.key} style={featured ? styles.cardFeatured : styles.card}>
-              <div style={styles.cardTop}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={styles.cardTitleRow}>
-                    <div style={styles.cardTitle}>{c.businessName}</div>
-                    {featured ? <div style={styles.top5}>TOP 5 NEAR YOU</div> : null}
-                  </div>
-                  <div style={styles.addr}>{c.address}</div>
-                </div>
-                <div style={styles.dist}>{distText}</div>
-              </div>
+        {/* TOP 5 */}
+        <div style={styles.sectionHeader}>
+          <div style={styles.sectionTitle}>Top 5 Near You</div>
+          <div style={styles.sectionSub}>Featured purely by distance (for now).</div>
+        </div>
 
-              <div style={styles.specials}>
-                {c.specials.map((s, idx) => (
-                  <div key={c.key + "-" + idx} style={styles.specialRow}>
-                    <div style={styles.specialLabel}>{s.label}</div>
-                    <div style={styles.specialDeal}>{s.deal}</div>
-                    <div style={styles.specialSub}>{s.sub}</div>
-                  </div>
-                ))}
-              </div>
+        {top5.length === 0 && !loading ? <div style={styles.empty}>No specials found in this radius.</div> : null}
+        {top5.map((c) => (
+          <Card key={c.key} c={c} featured={true} />
+        ))}
 
-              <div style={styles.links}>
-                <a href={mapsUrl(c.address)} target="_blank" rel="noopener noreferrer" style={styles.linkBtn}>
-                  Open in Maps
-                </a>
-                <a href={makeReportMailto(c.businessName, c.address)} style={styles.linkGhost}>
-                  Report issue
-                </a>
+        {/* REST (PAGINATED 10 AT A TIME) */}
+        {rest.length > 0 ? (
+          <>
+            <div style={{ height: 6 }} />
+            <div style={styles.sectionHeader}>
+              <div style={styles.sectionTitle}>More Nearby</div>
+              <div style={styles.sectionSub}>
+                Still sorted by distance • Load 10 more at a time
               </div>
             </div>
-          );
-        })}
 
-        {cards.length === 0 && !loading ? (
-          <div style={styles.empty}>No specials found in this radius.</div>
-        ) : null}
+            {visibleRest.map((c) => (
+              <Card key={c.key} c={c} featured={false} />
+            ))}
 
-        {hasMore ? (
-          <button onClick={() => setPage((p) => p + 1)} style={styles.moreBtn}>
-            Load more (show next {PAGE_SIZE})
-          </button>
+            {hasMore ? (
+              <button onClick={() => setPage((p) => p + 1)} style={styles.moreBtn}>
+                Load more (next {PAGE_SIZE})
+              </button>
+            ) : (
+              <div style={styles.endCap}>That’s everything in range.</div>
+            )}
+          </>
         ) : null}
 
         <div style={styles.footer}>Support: {SUPPORT_EMAIL}</div>
@@ -597,17 +661,17 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 10,
   },
   brandRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 },
-  brand: { fontWeight: 800, fontSize: 22, letterSpacing: 0.2 },
+  brand: { fontWeight: 900, fontSize: 22, letterSpacing: 0.2 },
   livePill: {
     fontSize: 12,
-    fontWeight: 800,
+    fontWeight: 900,
     padding: "4px 8px",
     borderRadius: 999,
     background: LIVE_GREEN,
     color: "#0b0f14",
   },
   controls: { display: "grid", gap: 10 },
-  row: { display: "flex", gap: 10, flexWrap: "wrap" },
+  row: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
   search: {
     width: "100%",
     padding: "10px 12px",
@@ -624,7 +688,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(255,255,255,0.06)",
     color: "#e8eef6",
     cursor: "pointer",
-    fontWeight: 700,
+    fontWeight: 800,
   },
   btnGreen: {
     padding: "10px 12px",
@@ -633,7 +697,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(34,197,94,0.18)",
     color: "#e8eef6",
     cursor: "pointer",
-    fontWeight: 800,
+    fontWeight: 900,
   },
   select: {
     padding: "10px 12px",
@@ -642,7 +706,15 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(255,255,255,0.06)",
     color: "#e8eef6",
     cursor: "pointer",
-    fontWeight: 700,
+    fontWeight: 800,
+  },
+  countPill: {
+    padding: "8px 10px",
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.05)",
+    fontSize: 12,
+    opacity: 0.95,
   },
   error: {
     padding: 10,
@@ -650,11 +722,16 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(239,68,68,0.35)",
     background: "rgba(239,68,68,0.12)",
     color: "#fecaca",
-    fontWeight: 700,
+    fontWeight: 800,
   },
   subtle: { fontSize: 12, opacity: 0.8 },
   mapWrap: { padding: 16, paddingTop: 12 },
-  map: { height: 320, borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,255,255,0.10)" },
+  map: {
+    height: 320,
+    borderRadius: 16,
+    overflow: "hidden",
+    border: "1px solid rgba(255,255,255,0.10)",
+  },
   safeNote: {
     margin: 16,
     padding: 12,
@@ -664,6 +741,15 @@ const styles: Record<string, React.CSSProperties> = {
     opacity: 0.9,
   },
   list: { padding: 16, display: "grid", gap: 12 },
+  sectionHeader: {
+    display: "grid",
+    gap: 4,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  sectionTitle: { fontSize: 14, fontWeight: 900, letterSpacing: 0.2 },
+  sectionSub: { fontSize: 12, opacity: 0.78 },
+
   card: {
     padding: 14,
     borderRadius: 16,
@@ -680,9 +766,9 @@ const styles: Record<string, React.CSSProperties> = {
   cardTop: { display: "flex", justifyContent: "space-between", gap: 12 },
   cardTitleRow: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
   cardTitle: { fontSize: 16, fontWeight: 900 },
-  top5: {
+  top5Pill: {
     fontSize: 11,
-    fontWeight: 900,
+    fontWeight: 950,
     padding: "4px 8px",
     borderRadius: 999,
     border: "1px solid rgba(34,197,94,0.55)",
@@ -690,6 +776,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   addr: { fontSize: 13, opacity: 0.9, marginTop: 4 },
   dist: { fontSize: 12, opacity: 0.9, whiteSpace: "nowrap", marginTop: 2 },
+
   specials: { marginTop: 12, display: "grid", gap: 10 },
   specialRow: {
     padding: 10,
@@ -700,6 +787,7 @@ const styles: Record<string, React.CSSProperties> = {
   specialLabel: { fontSize: 12, fontWeight: 900, opacity: 0.95 },
   specialDeal: { fontSize: 14, fontWeight: 800, marginTop: 4 },
   specialSub: { fontSize: 12, opacity: 0.85, marginTop: 4 },
+
   links: { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 },
   linkBtn: {
     padding: "10px 12px",
@@ -708,7 +796,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(255,255,255,0.06)",
     color: "#e8eef6",
     textDecoration: "none",
-    fontWeight: 800,
+    fontWeight: 900,
   },
   linkGhost: {
     padding: "10px 12px",
@@ -717,9 +805,10 @@ const styles: Record<string, React.CSSProperties> = {
     background: "transparent",
     color: "#e8eef6",
     textDecoration: "none",
-    fontWeight: 800,
+    fontWeight: 900,
     opacity: 0.9,
   },
+
   moreBtn: {
     padding: "12px 14px",
     borderRadius: 12,
@@ -727,8 +816,9 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(255,255,255,0.06)",
     color: "#e8eef6",
     cursor: "pointer",
-    fontWeight: 900,
+    fontWeight: 950,
   },
+  endCap: { fontSize: 12, opacity: 0.75, paddingTop: 2 },
   empty: { padding: 14, borderRadius: 12, opacity: 0.85 },
   footer: { marginTop: 10, fontSize: 12, opacity: 0.75 },
 };
