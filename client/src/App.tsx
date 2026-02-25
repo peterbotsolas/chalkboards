@@ -592,7 +592,12 @@ function normLower(x: any): string {
 function isApprovedStatus(status: any): boolean {
   if (status == null) return true;
   const s = normLower(status);
-  return s === "approved" || s === "approve" || s === "live" || s === "published";
+  return (
+    s === "approved" ||
+    s === "approve" ||
+    s === "live" ||
+    s === "published"
+  );
 }
 
 function isFlashType(t: any): boolean {
@@ -836,8 +841,7 @@ function GroupedCard({
   const shownLines = expanded ? lines : lines.slice(0, maxLinesCollapsed);
   const hiddenCount = Math.max(0, lines.length - shownLines.length);
 
-  const cardStyle =
-    variant === "top" ? styles.cardTop5 : styles.card;
+  const cardStyle = variant === "top" ? styles.cardTop5 : styles.card;
 
   return (
     <div style={cardStyle}>
@@ -850,7 +854,9 @@ function GroupedCard({
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {group.flashItems.length > 0 && <div style={styles.badgeFlash}>FLASH</div>}
+          {group.flashItems.length > 0 && (
+            <div style={styles.badgeFlash}>FLASH</div>
+          )}
           <div style={group.hasActive ? styles.badgeActive : styles.badgeLater}>
             {group.hasActive ? "ACTIVE" : "LATER"}
           </div>
@@ -1144,7 +1150,7 @@ export default function App() {
         matchesCategory(category, r.description, r.businessName, r.address)
       );
 
-    // Sort by distance first (you asked closest first)
+    // Sort by distance first (closest first)
     filtered.sort((a, b) => {
       if (a.distance !== b.distance) return a.distance - b.distance;
       // tie-breaker: active first
@@ -1189,7 +1195,16 @@ export default function App() {
   const groupedAllFeed = useMemo((): GroupedFeed[] => {
     const map = new Map<string, GroupedFeed>();
 
-    const ensure = (key: string, sample: { businessName: string; address: string; lat: number; lng: number; distance: number }) => {
+    const ensure = (
+      key: string,
+      sample: {
+        businessName: string;
+        address: string;
+        lat: number;
+        lng: number;
+        distance: number;
+      }
+    ) => {
       if (!map.has(key)) {
         map.set(key, {
           key,
@@ -1268,7 +1283,7 @@ export default function App() {
 
     const list = Array.from(map.values());
 
-    // ✅ Sort by distance first (global)
+    // Sort by distance first (global)
     list.sort((a, b) => {
       if (a.distance !== b.distance) return a.distance - b.distance;
       // tie breaker: active first
@@ -1279,13 +1294,10 @@ export default function App() {
     return list;
   }, [visibleTodayRows, activeFlashInRadius, timeTick]);
 
-  // ✅ Top 5 (closest first)
-  const groupedTopFeed = useMemo(
-    () => groupedAllFeed.slice(0, 5),
-    [groupedAllFeed]
-  );
+  // Top 5 (closest first)
+  const groupedTopFeed = useMemo(() => groupedAllFeed.slice(0, 5), [groupedAllFeed]);
 
-  // ✅ All Nearby excludes the top 5 entirely (no repeats)
+  // All Nearby excludes the top 5 entirely (no repeats)
   const groupedAllExceptTop = useMemo(() => {
     const topKeys = new Set(groupedTopFeed.map((g) => g.key));
     return groupedAllFeed.filter((g) => !topKeys.has(g.key));
@@ -1345,7 +1357,8 @@ export default function App() {
       const reportHref = makeReportMailto({
         businessName: g.businessName || "Business",
         address: g.address || "",
-        description: g.flashItems[0]?.description || g.regularItems[0]?.description || "",
+        description:
+          g.flashItems[0]?.description || g.regularItems[0]?.description || "",
         kind: g.flashItems.length > 0 ? "flash" : "weekly",
       });
 
@@ -1358,7 +1371,10 @@ export default function App() {
         .slice(0, 3)
         .map((x) =>
           `<div>${esc(
-            `${statusIcon(x.status)} ${x.description} (${prettyWindow(x.start, x.end)})`
+            `${statusIcon(x.status)} ${x.description} (${prettyWindow(
+              x.start,
+              x.end
+            )})`
           )}</div>`
         )
         .join("");
@@ -1377,7 +1393,9 @@ export default function App() {
             : ""
         }
         <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
-          <a href="${mapsUrlFromAddress(g.address)}" target="_blank" rel="noopener noreferrer">Open in Maps</a>
+          <a href="${mapsUrlFromAddress(
+            g.address
+          )}" target="_blank" rel="noopener noreferrer">Open in Maps</a>
           <a href="${reportHref}">Report issue</a>
         </div>
       `;
@@ -1518,7 +1536,15 @@ export default function App() {
     const description = weeklyDescription.trim();
     const day = weeklyDay;
 
-    if (!typedName || !street || !city || !state || !zip || !description || !day) {
+    if (
+      !typedName ||
+      !street ||
+      !city ||
+      !state ||
+      !zip ||
+      !description ||
+      !day
+    ) {
       alert("Please fill in ALL fields (name, address, day, time window, special).");
       return;
     }
@@ -1619,7 +1645,8 @@ export default function App() {
             <div style={styles.title}>Chalkboards</div>
 
             <div style={styles.subtitle}>
-              Digital Restaurant Chalkboards + Live Local Specials • <b>{today}</b> • {format12Hour(new Date())} •{" "}
+              Digital Restaurant Chalkboards + Live Local Specials • <b>{today}</b>{" "}
+              • {format12Hour(new Date())} •{" "}
               {dbStatus === "ok" ? (
                 <span
                   onClick={() => setReloadTick((x) => x + 1)}
@@ -1655,8 +1682,7 @@ export default function App() {
           style={styles.categoryRow}
           onWheel={(e: React.WheelEvent<HTMLDivElement>) => {
             const el = e.currentTarget;
-            if (Math.abs(e.deltaY) > Math.abs(e.deltaX))
-              el.scrollLeft += e.deltaY;
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) el.scrollLeft += e.deltaY;
             else el.scrollLeft += e.deltaX;
           }}
         >
@@ -1682,7 +1708,6 @@ export default function App() {
         <div style={styles.pod}>
           <div style={styles.podTitle}>Filters</div>
           <div style={styles.podRow}>
-
             <div style={styles.field}>
               <div style={styles.label}>Distance</div>
               <select
@@ -1852,17 +1877,12 @@ export default function App() {
             >
               {flashPosting ? "Posting..." : "Submit Flash"}
             </button>
-            <button
-              onClick={() => setShowFlashForm(false)}
-              style={styles.btnSecondary}
-            >
+            <button onClick={() => setShowFlashForm(false)} style={styles.btnSecondary}>
               Cancel
             </button>
           </div>
 
-          <div style={styles.microcopy}>
-            Flash Specials expire automatically.
-          </div>
+          <div style={styles.microcopy}>Flash Specials expire automatically.</div>
         </div>
       )}
 
@@ -1927,16 +1947,8 @@ export default function App() {
               </select>
             </div>
 
-            <TimePicker12
-              label="Start"
-              value={weeklyStart12}
-              onChange={setWeeklyStart12}
-            />
-            <TimePicker12
-              label="End"
-              value={weeklyEnd12}
-              onChange={setWeeklyEnd12}
-            />
+            <TimePicker12 label="Start" value={weeklyStart12} onChange={setWeeklyStart12} />
+            <TimePicker12 label="End" value={weeklyEnd12} onChange={setWeeklyEnd12} />
 
             <div style={{ gridColumn: "1 / -1", fontSize: 12, opacity: 0.9 }}>
               You chose: <b>{prettyTime12(weeklyStart12)}</b> –{" "}
@@ -1968,17 +1980,12 @@ export default function App() {
             >
               {weeklyPosting ? "Posting..." : "Submit Weekly"}
             </button>
-            <button
-              onClick={() => setShowWeeklyForm(false)}
-              style={styles.btnSecondary}
-            >
+            <button onClick={() => setShowWeeklyForm(false)} style={styles.btnSecondary}>
               Cancel
             </button>
           </div>
 
-          <div style={styles.microcopy}>
-            Weekly Specials show on the chosen weekday.
-          </div>
+          <div style={styles.microcopy}>Weekly Specials show on the chosen weekday.</div>
         </div>
       )}
 
@@ -2022,8 +2029,7 @@ export default function App() {
         <div style={styles.sectionHeaderRow}>
           <div style={styles.sectionTitle}>All Nearby</div>
           <div style={styles.sectionMeta}>
-            Showing <b>{visibleFullFeed.length}</b> /{" "}
-            <b>{groupedAllExceptTop.length}</b>
+            Showing <b>{visibleFullFeed.length}</b> / <b>{groupedAllExceptTop.length}</b>
           </div>
         </div>
 
@@ -2040,9 +2046,7 @@ export default function App() {
         {visibleFullFeed.length < groupedAllExceptTop.length && (
           <button
             onClick={() =>
-              setPageSize((n) =>
-                Math.min(groupedAllExceptTop.length, n + 10)
-              )
+              setPageSize((n) => Math.min(groupedAllExceptTop.length, n + 10))
             }
             style={styles.loadMoreBtn}
           >
@@ -2065,7 +2069,7 @@ export default function App() {
 }
 
 /** =========================
- *  STYLES (smoother + separated pods)
+ *  STYLES (tight + uniform spacing)
  *  ========================= */
 const styles: Record<string, React.CSSProperties> = {
   page: {
@@ -2084,13 +2088,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   header: {
-    padding: 12,
+    padding: 10,
     borderRadius: 18,
     background:
       "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
     border: "1px solid rgba(255,255,255,0.10)",
     boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   title: {
     fontSize: "clamp(28px, 8vw, 42px)",
@@ -2107,14 +2111,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   subtitle: { marginTop: 4, opacity: 0.92, fontSize: 13, lineHeight: 1.2 },
 
-  // pods
+  // pods (TIGHT + UNIFORM)
   pod: {
-    padding: 12,
+    padding: 10,
     borderRadius: 18,
     background: "rgba(255,255,255,0.05)",
     border: "1px solid rgba(255,255,255,0.10)",
     boxShadow: "0 10px 26px rgba(0,0,0,0.22)",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   podTitle: {
     fontWeight: 900,
@@ -2122,11 +2126,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     opacity: 0.92,
     textTransform: "uppercase",
-    marginBottom: 10,
+    marginBottom: 8,
   },
   podRow: {
     display: "flex",
-    gap: 10,
+    gap: 8,
     alignItems: "center",
     flexWrap: "wrap",
   },
@@ -2134,8 +2138,8 @@ const styles: Record<string, React.CSSProperties> = {
   controlsGrid: {
     display: "grid",
     gridTemplateColumns: "1fr",
-    gap: 12,
-    marginBottom: 12,
+    gap: 10,
+    marginBottom: 10,
   },
 
   categoryRow: {
@@ -2292,6 +2296,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.1,
   },
+
   segmentWrap: {
     display: "flex",
     gap: 8,
@@ -2321,20 +2326,20 @@ const styles: Record<string, React.CSSProperties> = {
   map: {
     height: 280,
     borderRadius: 18,
-    marginBottom: 12,
+    marginBottom: 10,
     border: "1px solid rgba(255,255,255,0.10)",
     boxShadow: "0 14px 34px rgba(0,0,0,0.45)",
     overflow: "hidden",
   },
 
-  section: { marginTop: 12 },
+  section: { marginTop: 10 },
   sectionHeaderRow: {
     display: "flex",
     alignItems: "baseline",
     justifyContent: "space-between",
     gap: 10,
     flexWrap: "wrap",
-    marginBottom: 8,
+    marginBottom: 6,
   },
   sectionTitle: {
     fontSize: 16,
@@ -2350,18 +2355,18 @@ const styles: Record<string, React.CSSProperties> = {
     background:
       "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
     border: "1px solid rgba(255,255,255,0.10)",
-    marginBottom: 10,
+    marginBottom: 8,
     boxShadow: "0 10px 26px rgba(0,0,0,0.30)",
   },
 
-  // ✅ green-highlight Top 5 cards
+  // green-highlight Top 5 cards
   cardTop5: {
     padding: 14,
     borderRadius: 18,
     background:
       "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
     border: "1px solid rgba(0, 255, 140, 0.22)",
-    marginBottom: 10,
+    marginBottom: 8,
     boxShadow:
       "0 10px 26px rgba(0,0,0,0.30), 0 0 0 2px rgba(0, 255, 140, 0.10), 0 0 18px rgba(0, 255, 140, 0.12)",
   },
@@ -2464,7 +2469,7 @@ const styles: Record<string, React.CSSProperties> = {
   footer: { marginTop: 16, opacity: 0.72, fontSize: 12, lineHeight: 1.4 },
 
   formCard: {
-    marginTop: 12,
+    marginTop: 10,
     padding: 14,
     borderRadius: 18,
     background: "rgba(255,255,255,0.045)",
