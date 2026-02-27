@@ -140,7 +140,7 @@ function prettyWindow(start: string, end: string): string {
 }
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 3959;
+  const R = 3959; // miles
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
@@ -415,7 +415,7 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "bacon",
     "bagel",
   ],
-  beer: ["beer", "draft", "pint", "ipa", "lager", "brew", "brewery", "bucket", "pitcher"],
+  beer: ["beer", "draft", "pint", "ipa", "lager", "brew", "brewery", "bucket"],
   cocktails: [
     "drink",
     "drinks",
@@ -430,11 +430,46 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "wine",
     "sangria",
   ],
-  coffee: ["coffee", "espresso", "latte", "cappuccino", "cafe", "iced coffee", "cold brew"],
-  dessert: ["dessert", "ice cream", "gelato", "cake", "brownie", "cookie", "donut", "cannoli", "cheesecake"],
+  coffee: [
+    "coffee",
+    "espresso",
+    "latte",
+    "cappuccino",
+    "cafe",
+    "iced coffee",
+    "cold brew",
+  ],
+  dessert: [
+    "dessert",
+    "ice cream",
+    "gelato",
+    "cake",
+    "brownie",
+    "cookie",
+    "donut",
+    "cannoli",
+    "cheesecake",
+  ],
   happyhour: ["happy hour", "hh", "2-for-1", "two for one", "bogo", "half off"],
-  latenight: ["late night", "after 9", "after 10", "after 11", "midnight", "kitchen open late"],
-  barfood: ["bar food", "apps", "appetizer", "nachos", "sliders", "wings", "fries", "pub", "tavern"],
+  latenight: [
+    "late night",
+    "after 9",
+    "after 10",
+    "after 11",
+    "midnight",
+    "kitchen open late",
+  ],
+  barfood: [
+    "bar food",
+    "apps",
+    "appetizer",
+    "nachos",
+    "sliders",
+    "wings",
+    "fries",
+    "pub",
+    "tavern",
+  ],
 };
 
 function matchesCategory(
@@ -804,9 +839,7 @@ function GroupedCard({
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {group.flashItems.length > 0 && (
-            <div style={styles.badgeFlash}>FLASH</div>
-          )}
+          {group.flashItems.length > 0 && <div style={styles.badgeFlash}>FLASH</div>}
           <div style={group.hasActive ? styles.badgeActive : styles.badgeLater}>
             {group.hasActive ? "ACTIVE" : "LATER"}
           </div>
@@ -859,8 +892,7 @@ export default function App() {
   const markersRef = useRef<L.Marker[]>([]);
   const userMarkerRef = useRef<L.Marker | null>(null);
 
-  /** ✅ CHANGE #1: default is Happening Now */
-  const [feedMode, setFeedMode] = useState<FeedMode>("now");
+  const [feedMode, setFeedMode] = useState<FeedMode>("upcoming");
   const showLaterToday = feedMode === "upcoming";
 
   const [radius, setRadius] = useState(10);
@@ -1012,6 +1044,7 @@ export default function App() {
       }),
     []
   );
+
   const userIcon = useMemo(
     () =>
       L.icon({
@@ -1094,32 +1127,18 @@ export default function App() {
     }
 
     const filtered = rows
-      .filter((r) =>
-        includesSearch(searchTerm, r.businessName, r.address, r.description)
-      )
-      .filter((r) =>
-        matchesCategory(category, r.description, r.businessName, r.address)
-      );
+      .filter((r) => includesSearch(searchTerm, r.businessName, r.address, r.description))
+      .filter((r) => matchesCategory(category, r.description, r.businessName, r.address));
 
     // Sort by distance first (closest first)
     filtered.sort((a, b) => {
       if (a.distance !== b.distance) return a.distance - b.distance;
-      // tie-breaker: active first
       if (a.status !== b.status) return a.status === "active" ? -1 : 1;
       return toMinutes(a.start) - toMinutes(b.start);
     });
 
     return filtered;
-  }, [
-    today,
-    yesterday,
-    nowMins,
-    userLocation,
-    radius,
-    weeklySpecials,
-    searchTerm,
-    category,
-  ]);
+  }, [today, yesterday, nowMins, userLocation, radius, weeklySpecials, searchTerm, category]);
 
   const visibleTodayRows = useMemo(() => {
     return todayRows.filter((r) => (showLaterToday ? true : r.status === "active"));
@@ -1133,12 +1152,8 @@ export default function App() {
         distance: getDistance(userLocation.lat, userLocation.lng, f.lat, f.lng),
       }))
       .filter((x) => radius === 999 || x.distance <= radius)
-      .filter(({ f }) =>
-        includesSearch(searchTerm, f.businessName, f.fullAddress, f.description)
-      )
-      .filter(({ f }) =>
-        matchesCategory(category, f.description, f.businessName, f.fullAddress)
-      )
+      .filter(({ f }) => includesSearch(searchTerm, f.businessName, f.fullAddress, f.description))
+      .filter(({ f }) => matchesCategory(category, f.description, f.businessName, f.fullAddress))
       .sort((a, b) => a.distance - b.distance);
   }, [flashSpecials, timeTick, userLocation, radius, searchTerm, category]);
 
@@ -1219,12 +1234,8 @@ export default function App() {
     // dedupe within restaurant
     map.forEach((g) => {
       g.flashItems = uniqByKey(g.flashItems, (x) => `flash|${x.description}`);
-      g.regularItems = uniqByKey(
-        g.regularItems,
-        (x) => `weekly|${x.description}|${x.start}|${x.end}|${x.status}`
-      );
+      g.regularItems = uniqByKey(g.regularItems, (x) => `weekly|${x.description}|${x.start}|${x.end}|${x.status}`);
 
-      // stable order inside card
       g.flashItems.sort((a, b) => a.expiresInMinutes - b.expiresInMinutes);
       g.regularItems.sort((a, b) => {
         if (a.status !== b.status) return a.status === "active" ? -1 : 1;
@@ -1234,7 +1245,7 @@ export default function App() {
 
     const list = Array.from(map.values());
 
-    // Sort by distance first
+    // Sort by distance first (global)
     list.sort((a, b) => {
       if (a.distance !== b.distance) return a.distance - b.distance;
       if (a.hasActive !== b.hasActive) return a.hasActive ? -1 : 1;
@@ -1244,13 +1255,16 @@ export default function App() {
     return list;
   }, [visibleTodayRows, activeFlashInRadius, timeTick]);
 
+  // Top 5 (closest first)
   const groupedTopFeed = useMemo(() => groupedAllFeed.slice(0, 5), [groupedAllFeed]);
 
+  // All Nearby excludes the top 5 entirely (no repeats)
   const groupedAllExceptTop = useMemo(() => {
     const topKeys = new Set(groupedTopFeed.map((g) => g.key));
     return groupedAllFeed.filter((g) => !topKeys.has(g.key));
   }, [groupedAllFeed, groupedTopFeed]);
 
+  /** Pagination for All Nearby (excluded) */
   const [pageSize, setPageSize] = useState(10);
   useEffect(() => {
     setPageSize(10);
@@ -1261,7 +1275,7 @@ export default function App() {
   }, [groupedAllExceptTop, pageSize]);
 
   /** =========================
-   *  MAP
+   *  MAP: ALWAYS ON
    *  ========================= */
   useEffect(() => {
     if (mapContainerRef.current && !mapRef.current) {
@@ -1275,15 +1289,16 @@ export default function App() {
           '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(mapRef.current);
     }
-    return () => {};
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // keep map centered when userLocation changes
   useEffect(() => {
     if (!mapRef.current) return;
     mapRef.current.setView([userLocation.lat, userLocation.lng], 12);
   }, [userLocation.lat, userLocation.lng]);
 
+  // update markers based on groupedAllFeed
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -1353,6 +1368,7 @@ export default function App() {
     }
   }, [groupedAllFeed, wingIcon]);
 
+  /** Locate me */
   const handleLocateMe = () => {
     if (!("geolocation" in navigator)) {
       alert("Geolocation is not supported by your browser");
@@ -1397,9 +1413,7 @@ export default function App() {
     const description = flashDescription.trim();
 
     if (!typedName || !street || !city || !state || !zip || !description) {
-      alert(
-        "Please fill in ALL fields: business name, street, city, state, zip, and special."
-      );
+      alert("Please fill in ALL fields: business name, street, city, state, zip, and special.");
       return;
     }
 
@@ -1410,9 +1424,7 @@ export default function App() {
 
     if (!coords) {
       setFlashPosting(false);
-      alert(
-        "Could not find that address. Please double-check the street, city, state, and ZIP."
-      );
+      alert("Could not find that address. Please double-check the street, city, state, and ZIP.");
       return;
     }
 
@@ -1446,9 +1458,7 @@ export default function App() {
     if (error) {
       console.log("SUPABASE INSERT ERROR:", error);
       setFlashPosting(false);
-      alert(
-        "Flash special could not save to the database.\n\nOpen Console and copy the error to me."
-      );
+      alert("Flash special could not save to the database.\n\nOpen Console and copy the error to me.");
       return;
     }
 
@@ -1499,9 +1509,7 @@ export default function App() {
 
     if (!coords) {
       setWeeklyPosting(false);
-      alert(
-        "Could not find that address. Please double-check the street, city, state, and ZIP."
-      );
+      alert("Could not find that address. Please double-check the street, city, state, and ZIP.");
       return;
     }
 
@@ -1533,9 +1541,7 @@ export default function App() {
     if (error) {
       console.log("SUPABASE WEEKLY INSERT ERROR:", error);
       setWeeklyPosting(false);
-      alert(
-        "Weekly special could not save to the database.\n\nOpen Console and copy the error to me."
-      );
+      alert("Weekly special could not save to the database.\n\nOpen Console and copy the error to me.");
       return;
     }
 
@@ -1555,33 +1561,33 @@ export default function App() {
     alert("Submitted for approval ✅ (pending)");
   };
 
+  /** Expanded cards */
   const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
   const toggleExpand = (key: string) =>
     setExpandedKeys((prev) => ({ ...prev, [key]: !prev[key] }));
 
   return (
     <div style={styles.page}>
-      {/* HEADER */}
-      <div style={styles.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      {/* HEADER (FIXED) */}
+      <div
+        style={{
+          ...styles.header,
+          paddingTop: "calc(10px + env(safe-area-inset-top))",
+        }}
+      >
+        <div style={styles.headerRow}>
           <img
             src="/favicon.png"
             alt="Chalkboards"
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 14,
-              objectFit: "contain",
-              flex: "0 0 auto",
-            }}
+            style={styles.headerLogo}
           />
 
           <div style={{ minWidth: 0 }}>
             <div style={styles.title}>Chalkboards</div>
 
             <div style={styles.subtitle}>
-              Digital Restaurant Chalkboards + Live Local Specials • <b>{today}</b> •{" "}
-              {format12Hour(new Date())} •{" "}
+              Digital Restaurant Chalkboards + Live Local Specials •{" "}
+              <b>{today}</b> • {format12Hour(new Date())} •{" "}
               {dbStatus === "ok" ? (
                 <span
                   onClick={() => setReloadTick((x) => x + 1)}
@@ -1597,9 +1603,7 @@ export default function App() {
               ) : dbStatus === "loading" ? (
                 <span style={{ opacity: 0.85 }}>Loading…</span>
               ) : dbStatus === "error" ? (
-                <span style={{ color: "#ff6b6b", fontWeight: 800 }}>
-                  Offline
-                </span>
+                <span style={{ color: "#ff6b6b", fontWeight: 800 }}>Offline</span>
               ) : null}
               {dbStatus === "error" && dbErrorText ? (
                 <span style={{ marginLeft: 10, opacity: 0.85 }}>
@@ -1617,8 +1621,7 @@ export default function App() {
           style={styles.categoryRow}
           onWheel={(e: React.WheelEvent<HTMLDivElement>) => {
             const el = e.currentTarget;
-            if (Math.abs(e.deltaY) > Math.abs(e.deltaX))
-              el.scrollLeft += e.deltaY;
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) el.scrollLeft += e.deltaY;
             else el.scrollLeft += e.deltaX;
           }}
         >
@@ -1639,7 +1642,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* CONTROLS PODS (Filters + Mode only) */}
+      {/* CONTROLS PODS (separated) */}
       <div style={styles.controlsGrid}>
         <div style={styles.pod}>
           <div style={styles.podTitle}>Filters</div>
@@ -1669,10 +1672,7 @@ export default function App() {
                 style={styles.searchInput}
               />
               {searchTerm.trim() && (
-                <button
-                  onClick={() => setSearchTerm("")}
-                  style={styles.btnSecondary}
-                >
+                <button onClick={() => setSearchTerm("")} style={styles.btnSecondary}>
                   Clear
                 </button>
               )}
@@ -1711,29 +1711,28 @@ export default function App() {
             </button>
           </div>
         </div>
-      </div>
 
-      {/* ✅ CHANGE #2: MAP ABOVE POST */}
-      <div ref={mapContainerRef} style={styles.map} />
-
-      {/* POST POD (now below map) */}
-      <div style={styles.pod}>
-        <div style={styles.podTitle}>Post</div>
-        <div style={styles.podRow}>
-          <button
-            onClick={() => setShowFlashForm((v) => !v)}
-            style={styles.btnPrimarySmall}
-          >
-            {showFlashForm ? "Close Flash" : "Post Flash"}
-          </button>
-          <button
-            onClick={() => setShowWeeklyForm((v) => !v)}
-            style={styles.btnSmall}
-          >
-            {showWeeklyForm ? "Close Weekly" : "Post Weekly"}
-          </button>
+        <div style={styles.pod}>
+          <div style={styles.podTitle}>Post</div>
+          <div style={styles.podRow}>
+            <button
+              onClick={() => setShowFlashForm((v) => !v)}
+              style={styles.btnPrimarySmall}
+            >
+              {showFlashForm ? "Close Flash" : "Post Flash"}
+            </button>
+            <button
+              onClick={() => setShowWeeklyForm((v) => !v)}
+              style={styles.btnSmall}
+            >
+              {showWeeklyForm ? "Close Weekly" : "Post Weekly"}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* MAP (always visible) */}
+      <div ref={mapContainerRef} style={styles.map} />
 
       {/* FORMS */}
       {showFlashForm && (
@@ -1810,10 +1809,7 @@ export default function App() {
             <button
               onClick={addFlashSpecial}
               disabled={flashPosting}
-              style={{
-                ...styles.btnPrimary,
-                opacity: flashPosting ? 0.65 : 1,
-              }}
+              style={{ ...styles.btnPrimary, opacity: flashPosting ? 0.65 : 1 }}
             >
               {flashPosting ? "Posting..." : "Submit Flash"}
             </button>
@@ -1890,16 +1886,8 @@ export default function App() {
               </select>
             </div>
 
-            <TimePicker12
-              label="Start"
-              value={weeklyStart12}
-              onChange={setWeeklyStart12}
-            />
-            <TimePicker12
-              label="End"
-              value={weeklyEnd12}
-              onChange={setWeeklyEnd12}
-            />
+            <TimePicker12 label="Start" value={weeklyStart12} onChange={setWeeklyStart12} />
+            <TimePicker12 label="End" value={weeklyEnd12} onChange={setWeeklyEnd12} />
 
             <div style={{ gridColumn: "1 / -1", fontSize: 12, opacity: 0.9 }}>
               You chose: <b>{prettyTime12(weeklyStart12)}</b> –{" "}
@@ -1924,10 +1912,7 @@ export default function App() {
             <button
               onClick={addWeeklySpecial}
               disabled={weeklyPosting}
-              style={{
-                ...styles.btnPrimary,
-                opacity: weeklyPosting ? 0.65 : 1,
-              }}
+              style={{ ...styles.btnPrimary, opacity: weeklyPosting ? 0.65 : 1 }}
             >
               {weeklyPosting ? "Posting..." : "Submit Weekly"}
             </button>
@@ -1939,9 +1924,7 @@ export default function App() {
             </button>
           </div>
 
-          <div style={styles.microcopy}>
-            Weekly Specials show on the chosen weekday.
-          </div>
+          <div style={styles.microcopy}>Weekly Specials show on the chosen weekday.</div>
         </div>
       )}
 
@@ -1954,10 +1937,7 @@ export default function App() {
             {category === "all"
               ? "All categories"
               : CATEGORIES.find((c) => c.key === category)?.label}{" "}
-            •{" "}
-            {feedMode === "now"
-              ? `${ICON_NOW} Happening Now`
-              : `${ICON_UPCOMING} Upcoming`}
+            • {feedMode === "now" ? `${ICON_NOW} Happening Now` : `${ICON_UPCOMING} Upcoming`}
           </div>
         </div>
 
@@ -1987,6 +1967,9 @@ export default function App() {
       <div style={styles.section}>
         <div style={styles.sectionHeaderRow}>
           <div style={styles.sectionTitle}>All Nearby</div>
+          <div style={styles.sectionMeta}>
+            Showing <b>{visibleFullFeed.length}</b> / <b>{groupedAllExceptTop.length}</b>
+          </div>
         </div>
 
         {visibleFullFeed.map((g) => (
@@ -2001,15 +1984,14 @@ export default function App() {
 
         {visibleFullFeed.length < groupedAllExceptTop.length && (
           <button
-            onClick={() =>
-              setPageSize((n) => Math.min(groupedAllExceptTop.length, n + 10))
-            }
+            onClick={() => setPageSize((n) => Math.min(groupedAllExceptTop.length, n + 10))}
             style={styles.loadMoreBtn}
           >
             Load more (next 10)
           </button>
         )}
       </div>
+
       <div style={styles.footer}>
         Sorted by distance (closest first). Support:{" "}
         <a
@@ -2051,6 +2033,22 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
     marginBottom: 10,
   },
+
+  // ✅ added: keeps logo + text aligned and prevents “smashed” header
+  headerRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    minWidth: 0,
+  },
+  headerLogo: {
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    objectFit: "contain",
+    flex: "0 0 auto",
+  },
+
   title: {
     fontSize: "clamp(28px, 8vw, 42px)",
     fontWeight: 900,
@@ -2295,7 +2293,12 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 6,
   },
-  sectionTitle: { fontSize: 16, fontWeight: 900, opacity: 0.98, letterSpacing: 0.2 },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 900,
+    opacity: 0.98,
+    letterSpacing: 0.2,
+  },
   sectionMeta: { fontSize: 12, opacity: 0.85 },
 
   card: {
@@ -2370,7 +2373,12 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 10,
   },
 
-  cardActions: { marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" },
+  cardActions: {
+    marginTop: 12,
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+  },
   mapLink: {
     display: "inline-block",
     padding: "9px 12px",
@@ -2419,7 +2427,12 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.10)",
     boxShadow: "0 10px 26px rgba(0,0,0,0.25)",
   },
-  formTitle: { fontSize: 14, fontWeight: 900, letterSpacing: 0.3, marginBottom: 10 },
+  formTitle: {
+    fontSize: 14,
+    fontWeight: 900,
+    letterSpacing: 0.3,
+    marginBottom: 10,
+  },
   formGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
