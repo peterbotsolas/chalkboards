@@ -257,6 +257,8 @@ type CategoryKey =
   | "mexican"
   | "pizza"
   | "burgers"
+  | "hotdogs"
+  | "fries"
   | "sushi"
   | "bbq"
   | "seafood"
@@ -278,6 +280,8 @@ const CATEGORIES: Array<{ key: CategoryKey; label: string; emoji: string }> = [
   { key: "mexican", label: "Mexican", emoji: "🌮" },
   { key: "pizza", label: "Pizza", emoji: "🍕" },
   { key: "burgers", label: "Burgers", emoji: "🍔" },
+  { key: "hotdogs", label: "Hot Dogs", emoji: "🌭" },
+  { key: "fries", label: "Fries", emoji: "🍟" },
   { key: "sushi", label: "Sushi", emoji: "🍣" },
   { key: "bbq", label: "BBQ", emoji: "🍖" },
   { key: "seafood", label: "Seafood", emoji: "🦞" },
@@ -296,7 +300,9 @@ const CATEGORIES: Array<{ key: CategoryKey; label: string; emoji: string }> = [
 
 const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
   all: [],
+
   wings: ["wing", "wings", "boneless", "tenders", "drum", "flat"],
+
   mexican: [
     "mexican",
     "taqueria",
@@ -336,8 +342,41 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "margaritas",
     "tequila",
   ],
+
   pizza: ["pizza", "slice", "pie", "pizzeria", "stromboli", "calzone"],
-  burgers: ["burger", "cheeseburger", "patty", "smashburger", "fries"],
+
+  burgers: ["burger", "cheeseburger", "patty", "smashburger"],
+
+  hotdogs: [
+    "hot dog",
+    "hotdog",
+    "hot dogs",
+    "hotdogs",
+    "frank",
+    "franks",
+    "sausage",
+    "brat",
+    "bratwurst",
+    "italian hot dog",
+    "italian hotdogs",
+  ],
+
+  fries: [
+    "fries",
+    "french fries",
+    "curly fries",
+    "waffle fries",
+    "crinkle fries",
+    "steak fries",
+    "sweet potato fries",
+    "tater tots",
+    "tots",
+    "loaded fries",
+    "cheese fries",
+    "chili cheese fries",
+    "poutine",
+  ],
+
   sushi: [
     "sushi",
     "maki",
@@ -349,7 +388,9 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "hibachi",
     "teriyaki",
   ],
+
   bbq: ["bbq", "barbecue", "brisket", "ribs", "smoke", "smoked", "pulled pork"],
+
   seafood: [
     "seafood",
     "shrimp",
@@ -363,6 +404,7 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "salmon",
     "tuna",
   ],
+
   pasta: [
     "pasta",
     "spaghetti",
@@ -376,6 +418,7 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "ravioli",
     "italian",
   ],
+
   med: [
     "mediterranean",
     "med",
@@ -394,6 +437,7 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "lamb",
     "chicken over rice",
   ],
+
   sandwiches: [
     "sandwich",
     "sub",
@@ -404,8 +448,11 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "panini",
     "deli",
     "cheesesteak",
+    "philly cheesesteak",
+    "steak sandwich",
     "chicken sandwich",
   ],
+
   breakfast: [
     "breakfast",
     "brunch",
@@ -416,6 +463,7 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "bacon",
     "bagel",
   ],
+
   beer: [
     "beer",
     "draft",
@@ -427,6 +475,7 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "bucket",
     "pitcher",
   ],
+
   cocktails: [
     "drink",
     "drinks",
@@ -441,6 +490,7 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "wine",
     "sangria",
   ],
+
   coffee: [
     "coffee",
     "espresso",
@@ -450,6 +500,7 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "iced coffee",
     "cold brew",
   ],
+
   dessert: [
     "dessert",
     "ice cream",
@@ -461,7 +512,9 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "cannoli",
     "cheesecake",
   ],
+
   happyhour: ["happy hour", "hh", "2-for-1", "two for one", "bogo", "half off"],
+
   latenight: [
     "late night",
     "after 9",
@@ -470,6 +523,7 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "midnight",
     "kitchen open late",
   ],
+
   barfood: [
     "bar food",
     "apps",
@@ -918,7 +972,6 @@ export default function App() {
         const left = Math.max(0, Math.round(insets?.left ?? 0));
         const right = Math.max(0, Math.round(insets?.right ?? 0));
 
-        // Write CSS vars that we use in styles.page
         document.documentElement.style.setProperty("--cb-sat", `${top}px`);
         document.documentElement.style.setProperty("--cb-sab", `${bottom}px`);
         document.documentElement.style.setProperty("--cb-sal", `${left}px`);
@@ -930,20 +983,17 @@ export default function App() {
 
     const setup = async () => {
       try {
-        // 1) set once
         const res: any = await (SafeArea as any).getSafeAreaInsets?.();
         if (res) applyInsets(res);
 
-        // 2) listen for changes (rotation, etc.)
         remove = (SafeArea as any).addListener?.(
           "safeAreaChanged",
           (data: any) => {
-            // some versions send { insets: {top...} } others send {top...}
             applyInsets(data?.insets ?? data);
           }
         );
       } catch {
-        // If plugin isn't available in web mode, env(safe-area-inset-*) still helps.
+        // ignore (web mode)
       }
     };
 
@@ -1116,6 +1166,7 @@ export default function App() {
       }),
     []
   );
+
   const userIcon = useMemo(
     () =>
       L.icon({
@@ -1208,7 +1259,6 @@ export default function App() {
     // Sort by distance first (closest first)
     filtered.sort((a, b) => {
       if (a.distance !== b.distance) return a.distance - b.distance;
-      // tie-breaker: active first
       if (a.status !== b.status) return a.status === "active" ? -1 : 1;
       return toMinutes(a.start) - toMinutes(b.start);
     });
@@ -1330,7 +1380,6 @@ export default function App() {
         (x) => `weekly|${x.description}|${x.start}|${x.end}|${x.status}`
       );
 
-      // stable order inside card
       g.flashItems.sort((a, b) => a.expiresInMinutes - b.expiresInMinutes);
       g.regularItems.sort((a, b) => {
         if (a.status !== b.status) return a.status === "active" ? -1 : 1;
@@ -1340,7 +1389,7 @@ export default function App() {
 
     const list = Array.from(map.values());
 
-    // Sort by distance first
+    // Sort by distance first (global)
     list.sort((a, b) => {
       if (a.distance !== b.distance) return a.distance - b.distance;
       if (a.hasActive !== b.hasActive) return a.hasActive ? -1 : 1;
@@ -1350,16 +1399,16 @@ export default function App() {
     return list;
   }, [visibleTodayRows, activeFlashInRadius, timeTick]);
 
-  const groupedTopFeed = useMemo(
-    () => groupedAllFeed.slice(0, 5),
-    [groupedAllFeed]
-  );
+  // Top 5 (closest first)
+  const groupedTopFeed = useMemo(() => groupedAllFeed.slice(0, 5), [groupedAllFeed]);
 
+  // All Nearby excludes the top 5 entirely (no repeats)
   const groupedAllExceptTop = useMemo(() => {
     const topKeys = new Set(groupedTopFeed.map((g) => g.key));
     return groupedAllFeed.filter((g) => !topKeys.has(g.key));
   }, [groupedAllFeed, groupedTopFeed]);
 
+  /** Pagination for All Nearby (excluded) */
   const [pageSize, setPageSize] = useState(10);
   useEffect(() => {
     setPageSize(10);
@@ -1370,7 +1419,7 @@ export default function App() {
   }, [groupedAllExceptTop, pageSize]);
 
   /** =========================
-   *  MAP
+   *  MAP: ALWAYS ON
    *  ========================= */
   useEffect(() => {
     if (mapContainerRef.current && !mapRef.current) {
@@ -1384,15 +1433,16 @@ export default function App() {
           '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(mapRef.current);
     }
-    return () => {};
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // keep map centered when userLocation changes
   useEffect(() => {
     if (!mapRef.current) return;
     mapRef.current.setView([userLocation.lat, userLocation.lng], 12);
   }, [userLocation.lat, userLocation.lng]);
 
+  // update markers based on groupedAllFeed
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -1423,13 +1473,14 @@ export default function App() {
 
       const regularLines = g.regularItems
         .slice(0, 3)
-        .map((x) =>
-          `<div>${esc(
-            `${statusIcon(x.status)} ${x.description} (${prettyWindow(
-              x.start,
-              x.end
-            )})`
-          )}</div>`
+        .map(
+          (x) =>
+            `<div>${esc(
+              `${statusIcon(x.status)} ${x.description} (${prettyWindow(
+                x.start,
+                x.end
+              )})`
+            )}</div>`
         )
         .join("");
 
@@ -1462,6 +1513,7 @@ export default function App() {
     }
   }, [groupedAllFeed, wingIcon]);
 
+  /** Locate me */
   const handleLocateMe = () => {
     if (!("geolocation" in navigator)) {
       alert("Geolocation is not supported by your browser");
@@ -1674,26 +1726,22 @@ export default function App() {
     alert("Submitted for approval ✅ (pending)");
   };
 
+  /** Expanded cards */
   const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
   const toggleExpand = (key: string) =>
     setExpandedKeys((prev) => ({ ...prev, [key]: !prev[key] }));
 
   return (
     <div style={styles.page}>
-      {/* HEADER */}
-      <div style={styles.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <img
-            src="/favicon.png"
-            alt="Chalkboards"
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 14,
-              objectFit: "contain",
-              flex: "0 0 auto",
-            }}
-          />
+      {/* HEADER (FIXED) */}
+      <div
+        style={{
+          ...styles.header,
+          paddingTop: "calc(10px + env(safe-area-inset-top))",
+        }}
+      >
+        <div style={styles.headerRow}>
+          <img src="/favicon.png" alt="Chalkboards" style={styles.headerLogo} />
 
           <div style={{ minWidth: 0 }}>
             <div style={styles.title}>Chalkboards</div>
@@ -1716,7 +1764,9 @@ export default function App() {
               ) : dbStatus === "loading" ? (
                 <span style={{ opacity: 0.85 }}>Loading…</span>
               ) : dbStatus === "error" ? (
-                <span style={{ color: "#ff6b6b", fontWeight: 800 }}>Offline</span>
+                <span style={{ color: "#ff6b6b", fontWeight: 800 }}>
+                  Offline
+                </span>
               ) : null}
               {dbStatus === "error" && dbErrorText ? (
                 <span style={{ marginLeft: 10, opacity: 0.85 }}>
@@ -1755,7 +1805,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* CONTROLS PODS (Filters + Mode only) */}
+      {/* CONTROLS PODS */}
       <div style={styles.controlsGrid}>
         <div style={styles.pod}>
           <div style={styles.podTitle}>Filters</div>
@@ -1829,10 +1879,10 @@ export default function App() {
         </div>
       </div>
 
-      {/* MAP ABOVE POST */}
+      {/* MAP */}
       <div ref={mapContainerRef} style={styles.map} />
 
-      {/* POST POD (below map) */}
+      {/* POST */}
       <div style={styles.pod}>
         <div style={styles.podTitle}>Post</div>
         <div style={styles.podRow}>
@@ -1916,7 +1966,7 @@ export default function App() {
               <input
                 value={flashDescription}
                 onChange={(e) => setFlashDescription(e.target.value)}
-                placeholder='Example: "Extra wings — 8 for $10 until 5pm"'
+                placeholder='Example: "Hot dogs + fries — $8 until 5pm"'
                 style={styles.input}
               />
             </div>
@@ -2027,7 +2077,7 @@ export default function App() {
               <input
                 value={weeklyDescription}
                 onChange={(e) => setWeeklyDescription(e.target.value)}
-                placeholder='Example: "Taco Tuesday — $2 tacos 4–9pm"'
+                placeholder='Example: "Cheesesteak + fries — $10 4–9pm"'
                 style={styles.input}
               />
             </div>
@@ -2097,6 +2147,10 @@ export default function App() {
       <div style={styles.section}>
         <div style={styles.sectionHeaderRow}>
           <div style={styles.sectionTitle}>All Nearby</div>
+          <div style={styles.sectionMeta}>
+            Showing <b>{visibleFullFeed.length}</b> /{" "}
+            <b>{groupedAllExceptTop.length}</b>
+          </div>
         </div>
 
         {visibleFullFeed.map((g) => (
@@ -2140,7 +2194,6 @@ export default function App() {
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
-    // ✅ This is the key: uses plugin CSS vars when available, otherwise env(safe-area-inset-*)
     paddingTop: "calc(env(safe-area-inset-top, 0px) + 60px)",
     paddingLeft: "calc(16px + var(--cb-sal, env(safe-area-inset-left)))",
     paddingRight: "calc(16px + var(--cb-sar, env(safe-area-inset-right)))",
@@ -2163,6 +2216,21 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
     marginBottom: 10,
   },
+
+  headerRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    minWidth: 0,
+  },
+  headerLogo: {
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    objectFit: "contain",
+    flex: "0 0 auto",
+  },
+
   title: {
     fontSize: "clamp(28px, 8vw, 42px)",
     fontWeight: 900,
@@ -2487,7 +2555,12 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 10,
   },
 
-  cardActions: { marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" },
+  cardActions: {
+    marginTop: 12,
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+  },
   mapLink: {
     display: "inline-block",
     padding: "9px 12px",
