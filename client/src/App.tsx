@@ -1,3 +1,4 @@
+import { SafeArea } from "capacitor-plugin-safe-area";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -140,7 +141,7 @@ function prettyWindow(start: string, end: string): string {
 }
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 3959;
+  const R = 3959; // miles
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
@@ -415,7 +416,17 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "bacon",
     "bagel",
   ],
-  beer: ["beer", "draft", "pint", "ipa", "lager", "brew", "brewery", "bucket", "pitcher"],
+  beer: [
+    "beer",
+    "draft",
+    "pint",
+    "ipa",
+    "lager",
+    "brew",
+    "brewery",
+    "bucket",
+    "pitcher",
+  ],
   cocktails: [
     "drink",
     "drinks",
@@ -430,11 +441,46 @@ const CATEGORY_KEYWORDS: Record<CategoryKey, string[]> = {
     "wine",
     "sangria",
   ],
-  coffee: ["coffee", "espresso", "latte", "cappuccino", "cafe", "iced coffee", "cold brew"],
-  dessert: ["dessert", "ice cream", "gelato", "cake", "brownie", "cookie", "donut", "cannoli", "cheesecake"],
+  coffee: [
+    "coffee",
+    "espresso",
+    "latte",
+    "cappuccino",
+    "cafe",
+    "iced coffee",
+    "cold brew",
+  ],
+  dessert: [
+    "dessert",
+    "ice cream",
+    "gelato",
+    "cake",
+    "brownie",
+    "cookie",
+    "donut",
+    "cannoli",
+    "cheesecake",
+  ],
   happyhour: ["happy hour", "hh", "2-for-1", "two for one", "bogo", "half off"],
-  latenight: ["late night", "after 9", "after 10", "after 11", "midnight", "kitchen open late"],
-  barfood: ["bar food", "apps", "appetizer", "nachos", "sliders", "wings", "fries", "pub", "tavern"],
+  latenight: [
+    "late night",
+    "after 9",
+    "after 10",
+    "after 11",
+    "midnight",
+    "kitchen open late",
+  ],
+  barfood: [
+    "bar food",
+    "apps",
+    "appetizer",
+    "nachos",
+    "sliders",
+    "wings",
+    "fries",
+    "pub",
+    "tavern",
+  ],
 };
 
 function matchesCategory(
@@ -547,7 +593,12 @@ function normLower(x: any): string {
 function isApprovedStatus(status: any): boolean {
   if (status == null) return true;
   const s = normLower(status);
-  return s === "approved" || s === "approve" || s === "live" || s === "published";
+  return (
+    s === "approved" ||
+    s === "approve" ||
+    s === "live" ||
+    s === "published"
+  );
 }
 
 function isFlashType(t: any): boolean {
@@ -854,12 +905,65 @@ function GroupedCard({
 type FeedMode = "now" | "upcoming";
 
 export default function App() {
+  /** =========================
+   *  ✅ SAFE AREA FIX (prevents top cut-off on iPhone)
+   *  ========================= */
+  useEffect(() => {
+    let remove: any = null;
+
+    const applyInsets = (insets: any) => {
+      try {
+        const top = Math.max(0, Math.round(insets?.top ?? 0));
+        const bottom = Math.max(0, Math.round(insets?.bottom ?? 0));
+        const left = Math.max(0, Math.round(insets?.left ?? 0));
+        const right = Math.max(0, Math.round(insets?.right ?? 0));
+
+        // Write CSS vars that we use in styles.page
+        document.documentElement.style.setProperty("--cb-sat", `${top}px`);
+        document.documentElement.style.setProperty("--cb-sab", `${bottom}px`);
+        document.documentElement.style.setProperty("--cb-sal", `${left}px`);
+        document.documentElement.style.setProperty("--cb-sar", `${right}px`);
+      } catch {
+        // ignore
+      }
+    };
+
+    const setup = async () => {
+      try {
+        // 1) set once
+        const res: any = await (SafeArea as any).getSafeAreaInsets?.();
+        if (res) applyInsets(res);
+
+        // 2) listen for changes (rotation, etc.)
+        remove = (SafeArea as any).addListener?.(
+          "safeAreaChanged",
+          (data: any) => {
+            // some versions send { insets: {top...} } others send {top...}
+            applyInsets(data?.insets ?? data);
+          }
+        );
+      } catch {
+        // If plugin isn't available in web mode, env(safe-area-inset-*) still helps.
+      }
+    };
+
+    setup();
+
+    return () => {
+      try {
+        remove?.remove?.();
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
+
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<L.Marker[]>([]);
   const userMarkerRef = useRef<L.Marker | null>(null);
 
-  /** ✅ CHANGE #1: default is Happening Now */
+  /** ✅ default is Happening Now */
   const [feedMode, setFeedMode] = useState<FeedMode>("now");
   const showLaterToday = feedMode === "upcoming";
 
@@ -1122,7 +1226,9 @@ export default function App() {
   ]);
 
   const visibleTodayRows = useMemo(() => {
-    return todayRows.filter((r) => (showLaterToday ? true : r.status === "active"));
+    return todayRows.filter((r) =>
+      showLaterToday ? true : r.status === "active"
+    );
   }, [todayRows, showLaterToday]);
 
   const activeFlashInRadius = useMemo(() => {
@@ -1244,7 +1350,10 @@ export default function App() {
     return list;
   }, [visibleTodayRows, activeFlashInRadius, timeTick]);
 
-  const groupedTopFeed = useMemo(() => groupedAllFeed.slice(0, 5), [groupedAllFeed]);
+  const groupedTopFeed = useMemo(
+    () => groupedAllFeed.slice(0, 5),
+    [groupedAllFeed]
+  );
 
   const groupedAllExceptTop = useMemo(() => {
     const topKeys = new Set(groupedTopFeed.map((g) => g.key));
@@ -1480,8 +1589,18 @@ export default function App() {
     const description = weeklyDescription.trim();
     const day = weeklyDay;
 
-    if (!typedName || !street || !city || !state || !zip || !description || !day) {
-      alert("Please fill in ALL fields (name, address, day, time window, special).");
+    if (
+      !typedName ||
+      !street ||
+      !city ||
+      !state ||
+      !zip ||
+      !description ||
+      !day
+    ) {
+      alert(
+        "Please fill in ALL fields (name, address, day, time window, special)."
+      );
       return;
     }
 
@@ -1580,8 +1699,8 @@ export default function App() {
             <div style={styles.title}>Chalkboards</div>
 
             <div style={styles.subtitle}>
-              Digital Restaurant Chalkboards + Live Local Specials • <b>{today}</b> •{" "}
-              {format12Hour(new Date())} •{" "}
+              Digital Restaurant Chalkboards + Live Local Specials • <b>{today}</b>{" "}
+              • {format12Hour(new Date())} •{" "}
               {dbStatus === "ok" ? (
                 <span
                   onClick={() => setReloadTick((x) => x + 1)}
@@ -1597,9 +1716,7 @@ export default function App() {
               ) : dbStatus === "loading" ? (
                 <span style={{ opacity: 0.85 }}>Loading…</span>
               ) : dbStatus === "error" ? (
-                <span style={{ color: "#ff6b6b", fontWeight: 800 }}>
-                  Offline
-                </span>
+                <span style={{ color: "#ff6b6b", fontWeight: 800 }}>Offline</span>
               ) : null}
               {dbStatus === "error" && dbErrorText ? (
                 <span style={{ marginLeft: 10, opacity: 0.85 }}>
@@ -1617,8 +1734,7 @@ export default function App() {
           style={styles.categoryRow}
           onWheel={(e: React.WheelEvent<HTMLDivElement>) => {
             const el = e.currentTarget;
-            if (Math.abs(e.deltaY) > Math.abs(e.deltaX))
-              el.scrollLeft += e.deltaY;
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) el.scrollLeft += e.deltaY;
             else el.scrollLeft += e.deltaX;
           }}
         >
@@ -1713,10 +1829,10 @@ export default function App() {
         </div>
       </div>
 
-      {/* ✅ CHANGE #2: MAP ABOVE POST */}
+      {/* MAP ABOVE POST */}
       <div ref={mapContainerRef} style={styles.map} />
 
-      {/* POST POD (now below map) */}
+      {/* POST POD (below map) */}
       <div style={styles.pod}>
         <div style={styles.podTitle}>Post</div>
         <div style={styles.podRow}>
@@ -1810,10 +1926,7 @@ export default function App() {
             <button
               onClick={addFlashSpecial}
               disabled={flashPosting}
-              style={{
-                ...styles.btnPrimary,
-                opacity: flashPosting ? 0.65 : 1,
-              }}
+              style={{ ...styles.btnPrimary, opacity: flashPosting ? 0.65 : 1 }}
             >
               {flashPosting ? "Posting..." : "Submit Flash"}
             </button>
@@ -1924,10 +2037,7 @@ export default function App() {
             <button
               onClick={addWeeklySpecial}
               disabled={weeklyPosting}
-              style={{
-                ...styles.btnPrimary,
-                opacity: weeklyPosting ? 0.65 : 1,
-              }}
+              style={{ ...styles.btnPrimary, opacity: weeklyPosting ? 0.65 : 1 }}
             >
               {weeklyPosting ? "Posting..." : "Submit Weekly"}
             </button>
@@ -2010,6 +2120,7 @@ export default function App() {
           </button>
         )}
       </div>
+
       <div style={styles.footer}>
         Sorted by distance (closest first). Support:{" "}
         <a
@@ -2029,10 +2140,11 @@ export default function App() {
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
-    paddingTop: "calc(16px + env(safe-area-inset-top))",
-    paddingLeft: "calc(16px + env(safe-area-inset-left))",
-    paddingRight: "calc(16px + env(safe-area-inset-right))",
-    paddingBottom: 16,
+    // ✅ This is the key: uses plugin CSS vars when available, otherwise env(safe-area-inset-*)
+    paddingTop: "calc(env(safe-area-inset-top, 0px) + 60px)",
+    paddingLeft: "calc(16px + var(--cb-sal, env(safe-area-inset-left)))",
+    paddingRight: "calc(16px + var(--cb-sar, env(safe-area-inset-right)))",
+    paddingBottom: "calc(16px + var(--cb-sab, env(safe-area-inset-bottom)))",
     background:
       "radial-gradient(1200px 700px at 20% -10%, rgba(0, 140, 255, 0.10), transparent 60%), #141414",
     color: "#f2f2f2",
@@ -2295,7 +2407,12 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 6,
   },
-  sectionTitle: { fontSize: 16, fontWeight: 900, opacity: 0.98, letterSpacing: 0.2 },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 900,
+    opacity: 0.98,
+    letterSpacing: 0.2,
+  },
   sectionMeta: { fontSize: 12, opacity: 0.85 },
 
   card: {
@@ -2419,7 +2536,12 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.10)",
     boxShadow: "0 10px 26px rgba(0,0,0,0.25)",
   },
-  formTitle: { fontSize: 14, fontWeight: 900, letterSpacing: 0.3, marginBottom: 10 },
+  formTitle: {
+    fontSize: 14,
+    fontWeight: 900,
+    letterSpacing: 0.3,
+    marginBottom: 10,
+  },
   formGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
